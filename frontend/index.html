@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230ea5e9%22/><text y=%22.9em%22 font-size=%2280%22 x=%225%22 fill=%22white%22 font-family=%22serif%22>E</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              marine: {
+                50: '#f0f4f8',
+                100: '#d9e2ec',
+                500: '#3e7cb1',
+                600: '#2c5e8a',
+                700: '#1e4363',
+                800: '#112b42',
+                900: '#091624'
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+      .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+      .custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #94a3b8; }
+      
+      /* Seamless Quill */
+      .ql-container.ql-snow { border: none !important; font-family: inherit; font-size: inherit; }
+      .ql-editor { padding: 0 !important; line-height: inherit; }
+      .ql-editor p { margin-bottom: 1em; }
+      .ql-toolbar.ql-snow { border: none !important; border-bottom: 1px solid #e2e8f0 !important; background: #f8fafc; position: sticky; top: 0; z-index: 10; }
+      .dark .ql-toolbar.ql-snow { background: #1e293b; border-bottom-color: #334155 !important; }
+      .dark .ql-snow .ql-stroke { stroke: #cbd5e1; }
+      .dark .ql-snow .ql-fill { fill: #cbd5e1; }
+      .dark .ql-snow .ql-picker { color: #cbd5e1; }
+      
+      /* Markdown Table Styling in Editor/Viewer */
+      .prose table { @apply w-full border-collapse my-4; }
+      .prose th, .prose td { @apply border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm; }
+      .prose th { @apply bg-slate-100 dark:bg-slate-800 font-semibold; }
+      
+      /* Better scrollbar for dark mode */
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+          @apply bg-slate-300 dark:bg-slate-700 rounded-full;
+      }
+      
+
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-inter antialiased h-screen overflow-hidden selection:bg-marine-500 selection:text-white flex transition-colors duration-200">
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-white dark:bg-slate-900 border-e border-slate-200 dark:border-slate-800 flex flex-col z-20 shadow-sm shrink-0 transition-colors duration-200">
+      <div class="p-6 border-b border-slate-100 dark:border-slate-800">
+          <h1 class="text-2xl font-bold text-marine-800 dark:text-slate-100 flex items-center gap-2">
+              <svg class="w-6 h-6 text-marine-600 dark:text-marine-400" fill="currentColor" viewBox="0 0 20 20"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+              EduFeed
+          </h1>
+      </div>
+      
+      <div class="p-4">
+          <button id="sync-btn" class="w-full bg-marine-600 hover:bg-marine-700 text-white font-medium py-2 px-4 rounded-lg shadow transition-colors flex items-center justify-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+              Update Feed
+          </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto custom-scrollbar px-3">
+          <div class="py-2 px-3 my-1 cursor-pointer rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-2 text-sm font-medium bg-slate-100 dark:bg-slate-800">
+              <i class="fas fa-newspaper w-4"></i> Article Reader
+          </div>
+          <a href="dashboard/dashboard.html" target="_blank" class="py-2 px-3 my-1 cursor-pointer rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors flex items-center gap-2 text-sm font-medium">
+              <i class="fas fa-chart-pie w-4"></i> Dashboard
+          </a>
+          
+          <div class="mt-4 mb-2 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Your Feeds</div>
+          <div id="feed-list">
+              <!-- Feeds here -->
+          </div>
+      </div>
+      
+      <!-- Add & Import Content Tools Collapsible Accordion -->
+      <div class="border-t border-slate-100 dark:border-slate-700">
+          <!-- Accordion Header -->
+          <button type="button" id="accordion-header" class="w-full flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold transition-all">
+              <span class="text-xs font-semibold uppercase tracking-wider flex items-center gap-2">
+                  <i class="fas fa-plus-circle text-marine-500"></i> Add / Import Tools
+              </span>
+              <i class="fas fa-chevron-down text-xs transition-transform duration-300" id="accordion-chevron"></i>
+          </button>
+          
+          <!-- Accordion Content (Collapsed by default via 'hidden') -->
+          <div id="accordion-content" class="hidden flex flex-col gap-4 p-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-700">
+              <!-- Unified Social Importer -->
+              <div class="flex flex-col gap-2.5">
+                  <h4 class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Import Social Post</h4>
+                  
+                  <!-- Tab Selectors -->
+                  <div class="flex bg-slate-100 dark:bg-slate-700 rounded-lg p-0.5" id="social-importer-tabs">
+                      <button type="button" data-platform="linkedin" class="social-tab-btn flex-1 flex items-center justify-center gap-1.5 py-1 text-[10px] font-bold rounded-md transition-all text-[#0a66c2] bg-white dark:bg-slate-600 shadow-sm" title="LinkedIn">
+                          <i class="fab fa-linkedin-in"></i>
+                          <span class="hidden lg:inline">LinkedIn</span>
+                      </button>
+                      <button type="button" data-platform="facebook" class="social-tab-btn flex-1 flex items-center justify-center gap-1.5 py-1 text-[10px] font-bold rounded-md transition-all text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" title="Facebook">
+                          <i class="fab fa-facebook-f"></i>
+                          <span class="hidden lg:inline">Facebook</span>
+                      </button>
+                      <button type="button" data-platform="instagram" class="social-tab-btn flex-1 flex items-center justify-center gap-1.5 py-1 text-[10px] font-bold rounded-md transition-all text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" title="Instagram">
+                          <i class="fab fa-instagram"></i>
+                          <span class="hidden lg:inline">Instagram</span>
+                      </button>
+                  </div>
+
+                  <!-- Active Form -->
+                  <form id="social-import-form" class="flex flex-col gap-1.5">
+                      <input type="url" id="social-url-input" placeholder="LinkedIn Post URL" class="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md px-3 py-1.5 text-xs dark:text-white focus:ring-2 focus:ring-[#0a66c2] outline-none transition-all" required>
+                      <button type="submit" id="social-import-submit-btn" class="w-full bg-[#0a66c2] hover:bg-[#084f97] text-white font-semibold py-1.5 px-3 rounded-md text-xs transition-colors shadow-sm flex items-center justify-center gap-2">
+                          Import Post
+                      </button>
+                  </form>
+              </div>
+
+              <!-- Add Feed -->
+              <div class="pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <h4 class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Add RSS Feed</h4>
+                  <form id="add-feed-form" class="flex gap-2">
+                      <input type="url" id="feed-url-input" placeholder="RSS URL..." class="flex-1 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-md px-2 py-1.5 text-xs focus:ring-2 focus:ring-marine-500 outline-none" required>
+                      <button type="submit" class="bg-marine-100 dark:bg-marine-700 hover:bg-marine-200 dark:hover:bg-marine-600 text-marine-700 dark:text-marine-100 px-3 py-1.5 rounded-md transition-colors text-xs font-semibold">+</button>
+                  </form>
+              </div>
+          </div>
+      </div>
+
+      <!-- Dark Mode Toggle -->
+      <div class="p-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Dark Mode</h3>
+          <button id="dark-mode-toggle" class="w-10 h-5 bg-slate-300 dark:bg-marine-600 rounded-full relative transition-colors focus:outline-none">
+              <span id="dark-mode-indicator" class="absolute start-1 top-1 bg-white w-3 h-3 rounded-full transition-transform duration-200 transform"></span>
+          </button>
+      </div>
+  </aside>
+
+  <!-- Middle Pane (List) -->
+  <div class="w-80 bg-slate-50 dark:bg-slate-800/50 border-e border-slate-200 dark:border-slate-700 flex flex-col z-10 shrink-0 transition-colors duration-200">
+      <div class="p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+          <input type="text" id="search-input" placeholder="Search articles..." class="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-marine-500 outline-none transition-colors">
+      </div>
+      
+      <!-- Filter Tabs -->
+      <div class="flex overflow-x-auto custom-scrollbar border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 transition-colors" id="filter-tabs">
+          <button class="filter-btn active px-3 py-1.5 text-sm font-medium text-marine-600 border-b-2 border-marine-600 whitespace-nowrap" data-filter="undone">Undone</button>
+          <button class="filter-btn px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700 border-b-2 border-transparent whitespace-nowrap" data-filter="done">Done</button>
+      </div>
+      
+      <div class="flex-1 overflow-y-auto custom-scrollbar" id="article-list">
+          <!-- Articles here -->
+      </div>
+  </div>
+
+  <!-- Right Pane (Editor/Viewer) -->
+  <main class="flex-1 bg-white dark:bg-slate-900 flex flex-col relative min-w-0 transition-colors duration-200">
+      <!-- Status Bar -->
+      <div id="article-toolbar" class="h-14 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-4 bg-white dark:bg-slate-800 hidden transition-colors z-30">
+          <!-- Left side: Source Tag -->
+          <div class="flex items-center" id="action-buttons-left">
+              <span id="article-source-tag" class="px-2.5 py-1 rounded-[14px] text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center gap-1.5 shadow-sm border border-slate-200 dark:border-slate-600">
+                  <!-- Generated dynamically in app.js -->
+              </span>
+          </div>
+          
+          <!-- Right side: Sleek Grouped Dropdowns -->
+          <div class="flex items-center gap-2 relative">
+              <!-- 1. Edit Mode -->
+              <button id="btn-edit-toggle" class="flex items-center gap-1 px-3 py-1.5 rounded-full bg-marine-50 hover:bg-marine-100 dark:bg-slate-700 dark:hover:bg-slate-600 text-marine-700 dark:text-marine-300 border border-marine-200 dark:border-slate-600 text-xs font-medium transition-all" title="Toggle Edit Mode">
+                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                  <span class="hidden sm:inline">Edit Mode</span>
+              </button>
+
+              <!-- 2. Done -->
+              <button id="btn-done" class="flex items-center gap-1 px-4 py-1.5 rounded-full bg-green-600 hover:bg-green-700 text-white text-xs font-semibold shadow-md transition-all" title="Mark as Finished">
+                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                  <span class="hidden sm:inline">Done</span>
+              </button>
+              
+              <!-- 3. Share Dropdown -->
+              <div class="relative inline-block text-left">
+                  <button id="btn-share-dropdown" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-200 dark:border-slate-600 shadow-sm transition-all" title="Share & Export">
+                      <i class="fas fa-share-nodes text-xs"></i>
+                      <span>Share</span>
+                      <i class="fas fa-chevron-down text-[9px]"></i>
+                  </button>
+                  <div id="share-dropdown-menu" class="hidden absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 py-1 z-50">
+                      <button id="btn-whatsapped" class="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2">
+                          <i class="fab fa-whatsapp text-green-600 text-sm w-4 text-center"></i>
+                          <span>Mark Shared (WA)</span>
+                      </button>
+                      <button id="btn-posted" class="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2">
+                          <i class="fas fa-share-nodes text-[#ff5722] text-sm w-4 text-center"></i>
+                          <span>Mark Posted (Blogger)</span>
+                      </button>
+                      <button id="btn-copy-html" class="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2">
+                          <i class="fas fa-code text-blue-500 text-sm w-4 text-center"></i>
+                          <span>Copy HTML Content</span>
+                      </button>
+                  </div>
+              </div>
+
+              <!-- 4. More Actions (Ellipsis) Dropdown -->
+              <div class="relative inline-block text-left">
+                  <button id="btn-more-dropdown" class="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 shadow-sm transition-all" title="More Actions">
+                      <i class="fas fa-ellipsis-v"></i>
+                  </button>
+                  <div id="more-dropdown-menu" class="hidden absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 py-1 z-50">
+                      <button id="btn-unread" class="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2">
+                          <i class="far fa-envelope text-slate-500 text-sm w-4 text-center"></i>
+                          <span id="btn-unread-text">Mark Unread</span>
+                      </button>
+                      <button id="btn-delete-article" class="w-full text-left px-4 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 flex items-center gap-2">
+                          <i class="fas fa-trash text-sm w-4 text-center"></i>
+                          <span>Delete Post</span>
+                      </button>
+                  </div>
+              </div>
+          </div>
+      </div>
+      
+      <!-- Content Area -->
+      <div class="flex-1 overflow-y-auto custom-scrollbar p-10 hidden" id="article-content-pane">
+          <div class="max-w-4xl mx-auto">
+              <a id="article-link" href="#" target="_blank" class="inline-block mb-4 text-marine-500 hover:text-marine-600 transition-colors duration-300 text-sm font-medium flex items-center gap-1">
+                  Original Source <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+              </a>
+              
+              <!-- Viewer Mode -->
+              <div id="viewer-mode" class="cursor-pointer group">
+                  <h1 id="article-title" dir="auto" class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4 leading-tight group-hover:text-marine-600 dark:group-hover:text-marine-400 transition-colors"></h1>
+                  <p id="article-date" class="text-slate-500 dark:text-slate-400 text-sm mb-8"></p>
+                  <div id="article-body" dir="auto" class="prose prose-slate dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 leading-relaxed group-hover:bg-slate-50/50 dark:group-hover:bg-slate-800/20 transition-colors rounded p-2 -m-2"></div>
+              </div>
+              
+              <!-- Editor Mode -->
+              <div id="editor-mode" class="hidden flex flex-col">
+                  <div class="mb-4">
+                      <input type="text" id="edit-title" dir="auto" class="w-full bg-transparent border-none p-0 text-3xl font-bold text-slate-900 dark:text-slate-100 focus:ring-0 outline-none leading-tight" placeholder="Title">
+                      <p id="edit-date-display" class="text-slate-500 dark:text-slate-400 text-sm mt-4 mb-8"></p>
+                  </div>
+                  <div class="flex-1 flex flex-col min-h-0">
+                      <div id="quill-container" class="w-full border-none bg-transparent dark:text-white custom-scrollbar prose prose-slate dark:prose-invert max-w-none" style="min-height: 400px;"></div>
+                  </div>
+                  <div class="flex justify-end mt-4">
+                      <button id="btn-save" class="px-6 py-2 bg-marine-600 hover:bg-marine-700 text-white font-semibold rounded-lg shadow-md transition-colors flex items-center gap-2">
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                          Save Modifications
+                      </button>
+                  </div>
+              </div>
+              
+          </div>
+      </div>
+  </main>
+
+  <!-- Toasts -->
+  <div id="toast-container" class="fixed bottom-6 right-6 flex flex-col gap-3 z-50 pointer-events-none"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

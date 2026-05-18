@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduFeed Dashboard</title>
+    <meta name="description" content="Real-time analytics and curation overview for EduFeed.">
+    <link rel="stylesheet" href="dashboard.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-section">
+                <i class="fas fa-feather-pointed fa-spin-slow"></i>
+                <span style="margin-left: 10px;">EDUFEED</span>
+            </div>
+            
+            <nav class="nav-links">
+                <div class="nav-item">
+                    <a href="../index.html" class="nav-link">
+                        <i class="fas fa-newspaper"></i>
+                        <span>Article Reader</span>
+                    </a>
+                </div>
+                <div class="nav-item">
+                    <a href="#" class="nav-link active">
+                        <i class="fas fa-chart-pie"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </div>
+            </nav>
+
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header>
+                <div class="header-left">
+                    <button id="sidebar-toggle" class="btn-glass" style="padding: 0.5rem 0.8rem; display: none;">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <form id="search-form" style="display: flex; flex: 1;">
+                        <input type="text" id="dashboard-search" class="search-bar" placeholder="Search your articles...">
+                    </form>
+                </div>
+                <div class="header-right">
+                    <button class="btn-glass" title="Toggle Theme" id="theme-toggle">
+                        <i class="fas fa-moon" id="theme-icon"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="content-body">
+                <section class="animate-fade-in" style="margin-bottom: 2.5rem; display: flex; justify-content: space-between; align-items: flex-end;">
+                    <div>
+                        <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem;">Curation Dashboard</h1>
+                        <p style="color: var(--text-muted);">Real-time overview of your EduFeed content and social distribution.</p>
+                    </div>
+                    <div id="connection-status" class="btn-glass" style="font-size: 0.75rem; padding: 0.4rem 0.8rem; pointer-events: none;">
+                        <i class="fas fa-circle" style="color: var(--accent-danger); margin-right: 5px; font-size: 0.6rem;"></i>
+                        Backend Offline
+                    </div>
+                </section>
+
+                <!-- Stats Grid -->
+                <div class="grid-container">
+                    <div class="card stat-card animate-fade-in" style="animation-delay: 0.1s;">
+                        <div class="stat-label">TOTAL FEEDS</div>
+                        <div class="stat-value" id="total-feeds">---</div>
+                        <div class="stat-delta delta-up">
+                            <i class="fas fa-rss"></i>
+                            <span id="feeds-delta">--- added this week</span>
+                        </div>
+                    </div>
+                    <div class="card stat-card animate-fade-in" style="animation-delay: 0.2s;">
+                        <div class="stat-label">UNDONE POSTS</div>
+                        <div class="stat-value" id="undone-posts">---</div>
+                        <div class="stat-delta delta-down">
+                            <i class="fas fa-clock"></i>
+                            <span id="articles-delta">--- new today</span>
+                        </div>
+                    </div>
+                    <div class="card stat-card animate-fade-in" style="animation-delay: 0.3s;">
+                        <div class="stat-label">COMPLETION RATE</div>
+                        <div class="stat-value" id="completion-rate">---%</div>
+                        <div class="stat-delta delta-up">
+                            <i class="fas fa-check-double"></i>
+                            <span id="done-posts-count">--- done articles</span>
+                        </div>
+                    </div>
+                    <div class="card stat-card animate-fade-in" style="animation-delay: 0.4s;">
+                        <div class="stat-label">DISTRIBUTION</div>
+                        <div style="display: flex; gap: 15px; margin-top: 5px;">
+                            <div title="Whatsapped">
+                                <i class="fab fa-whatsapp" style="color: #25D366;"></i>
+                                <span style="font-weight: 600;" id="whatsapped-count">---</span>
+                            </div>
+                            <div title="Posted">
+                                <i class="fas fa-share-nodes" style="color: var(--accent-secondary);"></i>
+                                <span style="font-weight: 600;" id="posted-count">---</span>
+                            </div>
+                        </div>
+                        <div class="stat-delta">
+                            <span>Shared to Socials</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Grid -->
+                <div class="main-grid">
+                    <!-- Revenue Chart Card -->
+                    <div class="card animate-fade-in" style="animation-delay: 0.5s;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                            <h3 style="font-weight: 600;">Curation Progress</h3>
+                            <select class="btn-glass" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">
+                                <option>Weekly</option>
+                                <option>Monthly</option>
+                            </select>
+                        </div>
+                        <div style="height: 300px;">
+                            <canvas id="curationChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity Card -->
+                    <div class="card animate-fade-in" style="animation-delay: 0.6s;">
+                        <h3 style="font-weight: 600; margin-bottom: 1.5rem;">Feed Activity</h3>
+                        <div id="activity-feed-container" style="display: flex; flex-direction: column; gap: 1.2rem;">
+                            <!-- Dynamically populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Secondary Analytics Grid -->
+                <div class="main-grid" style="margin-top: 1.5rem; grid-template-columns: 1fr 2fr;">
+                    <!-- Social Imports Breakdown -->
+                    <div class="card animate-fade-in" style="animation-delay: 0.7s;">
+                        <h3 style="font-weight: 600; margin-bottom: 1.5rem;">Social Imports</h3>
+                        <div style="height: 200px; display: flex; justify-content: center; align-items: center; position: relative;">
+                            <canvas id="socialImportsChart"></canvas>
+                        </div>
+                        <div id="social-imports-stats" style="display: flex; flex-direction: column; gap: 0.8rem; margin-top: 1.5rem;">
+                            <!-- Dynamically populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Distribution Channels Timeline -->
+                    <div class="card animate-fade-in" style="animation-delay: 0.8s;">
+                        <h3 style="font-weight: 600; margin-bottom: 1.5rem;">Distribution Timeline</h3>
+                        <div style="height: 300px;">
+                            <canvas id="distributionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>
