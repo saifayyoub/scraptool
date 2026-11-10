@@ -30,28 +30,40 @@ there in real time, so you can see exactly what EduFeed is working on.
 - `backend/server.prev.log` - the previous run's log, kept for troubleshooting.
 - If the backend window is closed, the server stops (EduFeed becomes unreachable).
 
-## Deploy on SnapDeploy
+## Deploy on SnapDeploy or Light Cloud
 
-The repository ships a `Dockerfile`, so SnapDeploy builds and runs it as-is.
+The repository ships a `Dockerfile` that both platforms build as-is: it listens on
+`0.0.0.0`, reads `PORT` from the environment and exposes port `8080`.
+
+### SnapDeploy
 
 1. Sign up at <https://snapdeploy.dev> (GitHub login, free tier needs no card).
 2. In the dashboard: **New container -> GitHub**, authorize the SnapDeploy GitHub App
    for `saifayyoub/scraptool`, pick branch `main` and root directory `/`.
-3. Keep the default build settings. No environment variables are required: SnapDeploy
-   injects `PORT` and `HOST`, and `main.py` / the Dockerfile listen on them.
-4. Deploy. The first build takes a few minutes (pip install), then the app is live at
-   `https://<name>.containers.snapdeploy.app`.
+3. Keep the default build settings. No environment variables are required.
+4. Deploy. The app is live at `https://<name>.containers.snapdeploy.app`.
 5. Open the container page for live logs - same output as the local backend window.
 
-Free-tier limits that matter for this app:
+### Light Cloud
 
-- 512 MB RAM / 0.25 vCPU, 100 container-hours a month, 10 deploys a day.
-- The container sleeps after ~15 minutes without traffic and wakes in ~1 minute.
-  Scheduled feed scans do not run while it sleeps.
+1. Sign in at <https://console.light-cloud.com> with GitHub and install the Light Cloud
+   GitHub App for `saifayyoub/scraptool`.
+2. **Create -> Deploy from GitHub**, choose the repository and branch `main`.
+   The type is detected as **Dockerfile / Backend (runs on a server)**.
+3. Leave install/build commands empty and the port at `8080` (read from `EXPOSE`).
+   No environment variables are needed.
+4. Click **Deploy**. The app is live at
+   `https://{branch}-{app}-{workspace}.light-cloud.io`, and every push to `main`
+   redeploys it.
+
+### Limits that matter for this app (both platforms)
+
+- Free tiers sleep / scale to zero when idle, so scheduled feed scans do not run then.
+  SnapDeploy sleeps after ~15 min; Light Cloud scales to zero and wakes on the next visit.
 - **No persistent disk.** The filesystem (including `edufeed.db`) resets on every
   wake, restart and redeploy. The image starts from the database snapshot committed
   to git, so changes made online are lost. For real use, move state to an external
-  database or object storage (and use Always-On for 24/7 operation).
+  database or object storage and use an always-on plan.
 - `backend/blogger_config.json` is deliberately not in git, so Blogger publishing
   is not configured on the server.
 - The app has no authentication: anyone with the URL can read and change the data.
