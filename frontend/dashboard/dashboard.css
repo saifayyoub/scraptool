@@ -37,6 +37,38 @@
     --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
 }
 
+.dark input,
+.dark select,
+.dark textarea {
+    background: #1e293b;
+    color: #f8fafc;
+    border-color: rgba(255,255,255,0.15);
+}
+
+.dark select option {
+    background: #1e293b;
+    color: #f8fafc;
+}
+
+.dark .feed-table tbody tr:hover {
+    background: rgba(255,255,255,0.03);
+}
+
+.dark .feed-table td,
+.dark .feed-table th {
+    border-bottom-color: rgba(255,255,255,0.06);
+}
+
+.dark .search-bar::placeholder {
+    color: #64748b;
+}
+
+.dark .btn-glass {
+    background: rgba(15, 23, 42, 0.6);
+    border-color: rgba(255,255,255,0.15);
+    color: #f8fafc;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -210,6 +242,63 @@ header {
     margin-bottom: 2rem;
 }
 
+/* KPI Cards (Google Analytics style) */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.kpi-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+    min-height: 100px;
+}
+
+.kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.kpi-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.kpi-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.kpi-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.kpi-trend {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.kpi-trend i {
+    margin-right: 2px;
+}
+
 /* Cards */
 .card {
     background: var(--bg-card);
@@ -316,10 +405,84 @@ header {
     border-color: var(--accent-primary);
 }
 
+/* Feed Table */
+.feed-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.feed-table th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--glass-border);
+    white-space: nowrap;
+}
+
+.feed-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.feed-table tbody tr:hover {
+    background: rgba(139, 92, 246, 0.05);
+}
+
+.feed-name {
+    display: block;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pct {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.pct-high {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent-success);
+}
+
+.pct-low {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--accent-danger);
+}
+
 /* Responsive */
+@media (max-width: 1300px) {
+    .kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 1200px) {
+    .sub-grid {
+        grid-template-columns: 1fr 1fr !important;
+    }
+}
+
 @media (max-width: 1024px) {
     .main-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
+    }
+    .kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    #dashboard-search {
+        width: 200px;
+    }
+    .content-body > section {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 0.5rem;
     }
 }
 
@@ -335,5 +498,59 @@ header {
     }
     header {
         width: 100%;
+    }
+    #sidebar-toggle {
+        display: inline-flex !important;
+    }
+    .kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+    }
+    .kpi-card {
+        padding: 1rem;
+        min-height: 90px;
+    }
+    .kpi-value {
+        font-size: 1.3rem;
+    }
+    .content-body {
+        padding: 1rem;
+    }
+    #dashboard-search {
+        width: 140px;
+    }
+    .header-left h1 {
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem;
+    }
+    .kpi-card {
+        padding: 0.75rem;
+        min-height: 80px;
+    }
+    .kpi-value {
+        font-size: 1.1rem;
+    }
+    .kpi-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
+    }
+    .kpi-label {
+        font-size: 0.6rem;
+    }
+    .content-body {
+        padding: 0.75rem;
+    }
+    header {
+        padding: 0 1rem;
+    }
+    #dashboard-search {
+        width: 100px;
     }
 }

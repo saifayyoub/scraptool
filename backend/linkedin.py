@@ -72,8 +72,8 @@ def import_linkedin_post(req: LinkedInImport):
     cursor = conn.cursor()
     try:
         cursor.execute("""
-            INSERT INTO articles (title, link, description, is_read, is_done)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO articles (title, link, description, is_read, is_done, updated_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         """, (title, req.url, description, 0, 0))
         conn.commit()
     except Exception as e:

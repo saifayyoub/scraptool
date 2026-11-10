@@ -1,810 +1,686 @@
-const API_BASE = 'http://127.0.0.1:8000';
-
-let currentFeeds = [];
-let currentFilter = 'undone';
-let currentSearch = '';
+const API = 'http://127.0.0.1:8002';
+let feeds = [];
+let articles = [];
 let selectedArticle = null;
-let isEditMode = false;
-let debounceTimer;
-let quill;
+let currentFilter = 'all';
+let folders = [];
 
-let isDarkMode = false;
-let currentImportPlatform = 'linkedin';
+const DOT_COLORS = ['orange','red','teal','purple','green','darkblue','gray','brown','marine','pink'];
 
-document.addEventListener('DOMContentLoaded', () => {
-    initTheme();
-    init();
-});
-
-function initTheme() {
-    isDarkMode = localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    updateThemeDOM();
-}
-
-function updateThemeDOM() {
-    if (isDarkMode) {
-        document.documentElement.classList.add('dark');
-        document.getElementById('dark-mode-indicator')?.classList.add('translate-x-5');
-    } else {
-        document.documentElement.classList.remove('dark');
-        document.getElementById('dark-mode-indicator')?.classList.remove('translate-x-5');
-    }
-}
-
-function toggleDarkMode() {
-    isDarkMode = !isDarkMode;
-    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-    updateThemeDOM();
-}
-
-async function init() {
-    quill = new Quill('#quill-container', {
-        theme: 'snow',
-        modules: {
-            table: true,
-            toolbar: [
-                [{ 'header': [1, 2, 3, false] }],
-                ['bold', 'italic', 'underline', 'strike'],
-                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                [{ 'direction': 'rtl' }, { 'align': [] }],
-                ['link', 'image', 'video'],
-                ['table'],
-                ['clean']
-            ]
-        }
+(async function init() {
+    if (localStorage.getItem('dark') === 'true') document.documentElement.classList.add('dark');
+    document.getElementById('dark-mode-toggle').addEventListener('click', () => {
+        document.documentElement.classList.toggle('dark');
+        localStorage.setItem('dark', document.documentElement.classList.contains('dark'));
     });
-    
-    // Handle URL parameters for deep linking (e.g. from Dashboard)
-    const urlParams = new URLSearchParams(window.location.search);
-    const searchParam = urlParams.get('search');
-    const filterParam = urlParams.get('filter');
-    
-    if (searchParam) {
-        currentSearch = searchParam;
-        document.getElementById('search-input').value = searchParam;
-    }
-    if (filterParam) {
-        currentFilter = filterParam;
-        // setFilter handles UI update and loadArticles
-        setFilter(filterParam);
-    } else {
-        setupEventListeners();
-        setupMarkdownPaste();
-        await loadFeeds();
-        await loadArticles();
-    }
+    await Promise.all([loadFeeds(), loadArticles()]);
+    setupResize();
+    setupSearch();
+    setupSyncBtn();
+    setupAddFeed();
+    setupAddFolder();
+    setupSettings();
+    setupFeedContextMenu();
+    document.getElementById('btn-done').addEventListener('click', () => updateStatus('done'));
+    document.getElementById('btn-posted').addEventListener('click', publishToBlogger);
+    document.getElementById('btn-copy-html').addEventListener('click', copyHTML);
+    document.getElementById('btn-fulltext').addEventListener('click', fetchFullText);
+    document.getElementById('btn-star-toggle').addEventListener('click', () => starArticle(selectedArticle?.id));
+    document.getElementById('btn-unread').addEventListener('click', () => updateStatus('unread'));
+    document.getElementById('btn-delete-article').addEventListener('click', deleteCurrentArticle);
+})();
 
-    if (filterParam) {
-        // If we didn't call the default setup above
-        setupEventListeners();
-        setupMarkdownPaste();
-        await loadFeeds();
-    }
-}
-
-function setupMarkdownPaste() {
-    const editor = document.querySelector('#quill-container .ql-editor');
-    if (!editor) return;
-
-    editor.addEventListener('paste', (e) => {
-        // Allow default if it's already HTML (e.g. copied from a website)
-        if (e.clipboardData.types.includes('text/html')) return;
-
-        const text = e.clipboardData.getData('text/plain');
-        
-        // Detection for markdown patterns (headers, tables, bold, links)
-        const isMd = /^#+\s|\|.*\||\[.*\]\(.*\)|^\s*[\*\+-]\s|^\d+\.\s/m.test(text);
-        
-        if (isMd) {
-            e.preventDefault();
-            const html = marked.parse(text);
-            const range = quill.getSelection();
-            quill.clipboard.dangerouslyPasteHTML(range ? range.index : 0, html);
-            showToast('Formatted as Markdown');
-        }
-    });
-}
-
-function showToast(message, type = 'success') {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    const bg = type === 'success' ? 'bg-green-600' : (type === 'error' ? 'bg-red-600' : 'bg-marine-600');
-    toast.className = `${bg} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 transform transition-all duration-300 translate-y-10 opacity-0 pointer-events-auto`;
-    toast.innerHTML = `
-        <span class="text-sm font-medium">${message}</span>
-        <button onclick="this.parentElement.remove()" class="text-white opacity-70 hover:opacity-100">×</button>
-    `;
-    container.appendChild(toast);
-    
-    // Animate in
-    setTimeout(() => {
-        toast.classList.remove('translate-y-10', 'opacity-0');
-    }, 10);
-    
-    // Auto remove
-    setTimeout(() => {
-        toast.classList.add('translate-y-10', 'opacity-0');
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
-
-function setupEventListeners() {
-    // Add Feed
-    const addFeedForm = document.getElementById('add-feed-form');
-    addFeedForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const input = document.getElementById('feed-url-input');
-        const url = input.value;
-        if (!url) return;
-        
-        try {
-            const btn = addFeedForm.querySelector('button');
-            btn.innerHTML = '<span class="animate-spin w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full inline-block"></span>';
-            const res = await fetch(`${API_BASE}/feeds/`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({url})
-            });
-            if (res.ok) {
-                input.value = '';
-                showToast('Feed added successfully! Fetching articles...');
-                await loadFeeds();
-                // Trigger a sync for the new feed
-                await fetch(`${API_BASE}/sync/`, {method: 'POST'});
-                await loadArticles();
-            } else {
-                const errData = await res.json();
-                showToast(errData.detail || 'Failed to add feed.', 'error');
-            }
-        } catch (err) {
-            console.error(err);
-            showToast('Network error: Is the backend server running?', 'error');
-        } finally {
-            const btn = addFeedForm.querySelector('button');
-            btn.innerHTML = '+';
-        }
-    });
-
-    // Update Feeds
-    const syncBtn = document.getElementById('sync-btn');
-    syncBtn.addEventListener('click', async () => {
-        const originalText = syncBtn.innerHTML;
-        syncBtn.innerHTML = '<span class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full inline-block"></span> Updating...';
-        try {
-            const res = await fetch(`${API_BASE}/sync/`, {method: 'POST'});
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Failed to update feeds.');
-            }
-            const data = await res.json();
-            showToast(`Feeds updated. ${data.new_articles_count} new articles.`);
-            await loadArticles();
-        } catch (err) {
-            console.error(err);
-            showToast(err.message || 'Failed to update feeds.', 'error');
-        }
-        syncBtn.innerHTML = originalText;
-    });
-    
-    // Unified Social Importer Tabs
-    const importTabs = document.querySelectorAll('.social-tab-btn');
-    const importForm = document.getElementById('social-import-form');
-    const importInput = document.getElementById('social-url-input');
-    const importBtn = document.getElementById('social-import-submit-btn');
-
-    importTabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const platform = tab.dataset.platform;
-            currentImportPlatform = platform;
-
-            // Reset tabs UI styling
-            importTabs.forEach(t => {
-                t.className = "social-tab-btn flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200";
-            });
-
-            // Set active tab styling
-            if (platform === 'linkedin') {
-                tab.className = "social-tab-btn flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all text-[#0a66c2] bg-white dark:bg-slate-600 shadow-sm";
-                importInput.placeholder = "LinkedIn Post URL";
-                importInput.className = "w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md px-3 py-1.5 text-sm dark:text-white focus:ring-2 focus:ring-[#0a66c2] outline-none transition-all";
-                importBtn.className = "w-full bg-[#0a66c2] hover:bg-[#084f97] text-white font-medium py-1.5 px-3 rounded-md text-sm transition-colors shadow-sm flex items-center justify-center gap-2";
-            } else if (platform === 'facebook') {
-                tab.className = "social-tab-btn flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all text-[#1877f2] bg-white dark:bg-slate-600 shadow-sm";
-                importInput.placeholder = "Facebook Post URL";
-                importInput.className = "w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md px-3 py-1.5 text-sm dark:text-white focus:ring-2 focus:ring-[#1877f2] outline-none transition-all";
-                importBtn.className = "w-full bg-[#1877f2] hover:bg-[#156bec] text-white font-medium py-1.5 px-3 rounded-md text-sm transition-colors shadow-sm flex items-center justify-center gap-2";
-            } else if (platform === 'instagram') {
-                tab.className = "social-tab-btn flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all text-[#e1306c] bg-white dark:bg-slate-600 shadow-sm";
-                importInput.placeholder = "Instagram Post/Reel URL";
-                importInput.className = "w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md px-3 py-1.5 text-sm dark:text-white focus:ring-2 focus:ring-[#e1306c] outline-none transition-all";
-                importBtn.className = "w-full bg-[#e1306c] hover:bg-[#c1245c] text-white font-medium py-1.5 px-3 rounded-md text-sm transition-colors shadow-sm flex items-center justify-center gap-2";
-            }
-        });
-    });
-
-    // Unified Social Import Form Submit
-    importForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const url = importInput.value;
-        if (!url) return;
-        
-        const origText = importBtn.innerHTML;
-        importBtn.disabled = true;
-        importBtn.innerHTML = '<span class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full inline-block"></span> Importing...';
-        
-        try {
-            const res = await fetch(`${API_BASE}/${currentImportPlatform}/import`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({url})
-            });
-            if (res.ok) {
-                importInput.value = '';
-                const platformName = currentImportPlatform.charAt(0).toUpperCase() + currentImportPlatform.slice(1);
-                showToast(`${platformName} post imported!`);
-                if (currentFilter !== 'undone') {
-                    setFilter('undone');
-                } else {
-                    await loadArticles();
-                }
-            } else {
-                const data = await res.json();
-                showToast(data.detail || 'Failed to import.', 'error');
-            }
-        } catch (err) {
-            showToast('Network error.', 'error');
-        } finally {
-            importBtn.disabled = false;
-            importBtn.innerHTML = origText;
-        }
-    });
-
-    // Filters
-    const filterBtns = document.querySelectorAll('.filter-btn');
-    filterBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            setFilter(e.target.dataset.filter);
-        });
-    });
-
-    // Search
-    const searchInput = document.getElementById('search-input');
-    searchInput.addEventListener('input', (e) => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            currentSearch = e.target.value;
-            loadArticles();
-        }, 300);
-    });
-
-    // Article Status & Action Buttons
-    document.getElementById('btn-unread').addEventListener('click', () => updateArticleStatus('unread'));
-    document.getElementById('btn-posted').addEventListener('click', () => updateArticleStatus('posted'));
-    document.getElementById('btn-whatsapped').addEventListener('click', () => updateArticleStatus('whatsapped'));
-    document.getElementById('btn-done').addEventListener('click', () => updateArticleStatus('done'));
-    document.getElementById('btn-copy-html').addEventListener('click', copyArticleHtml);
-    
-    // Edit Toggle
-    document.getElementById('btn-edit-toggle').addEventListener('click', toggleEditMode);
-    
-    // Save Edit
-    document.getElementById('btn-save').addEventListener('click', saveArticleEdit);
-    
-    // Delete Article
-    document.getElementById('btn-delete-article').addEventListener('click', deleteArticle);
-    
-    // Dark Mode
-    document.getElementById('dark-mode-toggle').addEventListener('click', toggleDarkMode);
-    
-    // Seamless Edit Mode: Click viewer area to edit
-    document.getElementById('viewer-mode').addEventListener('click', () => {
-        if (!isEditMode) toggleEditMode();
-    });
-
-    // Sidebar Accordion Toggle
-    const accordionHeader = document.getElementById('accordion-header');
-    const accordionContent = document.getElementById('accordion-content');
-    const accordionChevron = document.getElementById('accordion-chevron');
-    if (accordionHeader && accordionContent) {
-        accordionHeader.addEventListener('click', () => {
-            accordionContent.classList.toggle('hidden');
-            accordionChevron.classList.toggle('rotate-180');
-        });
-    }
-
-    // Toolbar Dropdowns
-    const shareDropdownBtn = document.getElementById('btn-share-dropdown');
-    const shareDropdownMenu = document.getElementById('share-dropdown-menu');
-    const moreDropdownBtn = document.getElementById('btn-more-dropdown');
-    const moreDropdownMenu = document.getElementById('more-dropdown-menu');
-
-    if (shareDropdownBtn && shareDropdownMenu) {
-        shareDropdownBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            shareDropdownMenu.classList.toggle('hidden');
-            if(moreDropdownMenu) moreDropdownMenu.classList.add('hidden');
-        });
-    }
-
-    if (moreDropdownBtn && moreDropdownMenu) {
-        moreDropdownBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            moreDropdownMenu.classList.toggle('hidden');
-            if(shareDropdownMenu) shareDropdownMenu.classList.add('hidden');
-        });
-    }
-
-    // Close dropdowns when clicking outside
-    document.addEventListener('click', (e) => {
-        if (shareDropdownMenu && !shareDropdownBtn.contains(e.target) && !shareDropdownMenu.contains(e.target)) {
-            shareDropdownMenu.classList.add('hidden');
-        }
-        if (moreDropdownMenu && !moreDropdownBtn.contains(e.target) && !moreDropdownMenu.contains(e.target)) {
-            moreDropdownMenu.classList.add('hidden');
-        }
-    });
-}
-
-function setFilter(filter) {
-    currentFilter = filter;
-    
-    // Update active UI
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        if (btn.dataset.filter === filter) {
-            btn.classList.add('text-marine-600', 'border-marine-600');
-            btn.classList.remove('text-slate-500', 'border-transparent');
-        } else {
-            btn.classList.remove('text-marine-600', 'border-marine-600');
-            btn.classList.add('text-slate-500', 'border-transparent');
-        }
-    });
-    
-    loadArticles();
+function clearNavSelection() {
+    document.querySelectorAll('.nav-item, .feed-item').forEach(el => el.classList.remove('selected'));
 }
 
 async function loadFeeds() {
     try {
-        const res = await fetch(`${API_BASE}/feeds/`);
-        currentFeeds = await res.json();
-        renderFeeds(currentFeeds);
-    } catch (err) {
-        console.error("Error loading feeds", err);
-    }
+        const r = await fetch(`${API}/feeds/`);
+        feeds = await r.json();
+        renderFeeds();
+        document.getElementById('feed-count').textContent = `${feeds.length} feeds`;
+    } catch (e) { console.error('feeds error', e); }
 }
 
-function renderFeeds(feeds) {
-    const list = document.getElementById('feed-list');
-    list.innerHTML = `
-        <div class="py-2 px-3 my-1 cursor-pointer rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-2 text-sm font-medium ${currentFeedId === 'all' ? 'bg-slate-100 dark:bg-slate-800 font-semibold text-marine-700 dark:text-marine-300' : ''}" onclick="filterByFeed('all')">
-            <i class="fas fa-list text-slate-400 w-4 text-center text-xs"></i> All Feeds
-        </div>
-        <div class="py-2 px-3 my-1 cursor-pointer rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-2 text-sm font-medium ${currentFeedId === 'linkedin' ? 'bg-slate-100 dark:bg-slate-800 font-semibold text-[#0a66c2]' : ''}" onclick="filterByFeed('linkedin')">
-            <i class="fab fa-linkedin text-[#0a66c2] w-4 text-center"></i> LinkedIn
-        </div>
-        <div class="py-2 px-3 my-1 cursor-pointer rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-2 text-sm font-medium ${currentFeedId === 'facebook' ? 'bg-slate-100 dark:bg-slate-800 font-semibold text-[#1877f2]' : ''}" onclick="filterByFeed('facebook')">
-            <i class="fab fa-facebook text-[#1877f2] w-4 text-center"></i> Facebook
-        </div>
-        <div class="py-2 px-3 my-1 cursor-pointer rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-2 text-sm font-medium ${currentFeedId === 'instagram' ? 'bg-slate-100 dark:bg-slate-800 font-semibold text-[#e1306c]' : ''}" onclick="filterByFeed('instagram')">
-            <i class="fab fa-instagram text-[#e1306c] w-4 text-center"></i> Instagram
-        </div>
-    `;
-    
-    feeds.forEach(feed => {
-        const domain = new URL(feed.url).hostname;
-        const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-        
-        const el = document.createElement('div');
-        const isActive = currentFeedId === feed.id;
-        el.className = `group py-2 px-3 my-1 cursor-pointer rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors flex items-center justify-between text-sm ${isActive ? 'bg-slate-100 dark:bg-slate-800 font-semibold text-marine-600 dark:text-marine-400' : ''}`;
-        el.innerHTML = `
-            <div class="flex items-center gap-2 truncate" onclick="filterByFeed(${feed.id})">
-                <img src="${faviconUrl}" class="w-4 h-4 rounded-sm" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2240%22 fill=%22%23cbd5e1%22/></svg>'"> 
-                <span class="truncate" title="${feed.title}">${feed.title}</span>
+function feedDomain(url) {
+    try { return new URL(url).hostname; } catch { return ''; }
+}
+
+function renderFeeds() {
+    const el = document.getElementById('feed-list');
+    el.innerHTML = feeds.map((f, i) => {
+        const uc = f.unread_count || 0;
+        const dot = DOT_COLORS[i % DOT_COLORS.length];
+        const domain = feedDomain(f.url);
+        return `<div class="feed-item" data-id="${f.id}" onclick="filterFeed(${f.id})">
+            <div class="favicon-dot ${dot}" style="position:relative;overflow:hidden;">
+                ${domain ? `<img src="https://${domain}/favicon.ico" width="14" height="14" style="position:absolute;inset:0;border-radius:50%;" onerror="this.remove()" />` : ''}
             </div>
-            <button onclick="deleteFeed(event, ${feed.id})" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all p-1" title="Delete Feed">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-            </button>
-        `;
-        list.appendChild(el);
-    });
+            <span class="feed-label">${f.title}</span>
+            ${uc > 0 ? `<span class="feed-badge">${uc}</span>` : ''}
+        </div>`;
+    }).join('');
 }
 
-async function deleteFeed(event, feedId) {
-    event.stopPropagation();
-    if (!confirm('Are you sure you want to delete this feed? All UNDONE articles will be removed. DONE articles will be kept.')) return;
-    
-    try {
-        const res = await fetch(`${API_BASE}/feeds/${feedId}`, { method: 'DELETE' });
-        if (res.ok) {
-            showToast('Feed deleted.');
-            if (currentFeedId === feedId) currentFeedId = 'all';
-            await loadFeeds();
-            await loadArticles();
-        } else {
-            showToast('Failed to delete feed.', 'error');
-        }
-    } catch (err) {
-        showToast('Network error.', 'error');
-    }
-}
-
-let currentFeedId = 'all';
-function filterByFeed(id) {
-    currentFeedId = id;
-    renderFeeds(currentFeeds);
+function filterAll() {
+    currentFilter = 'all';
+    selectedArticle = null;
+    clearNavSelection();
+    document.getElementById('nav-all')?.classList.add('selected');
     loadArticles();
+}
+
+function filterStarred() {
+    currentFilter = 'starred';
+    selectedArticle = null;
+    clearNavSelection();
+    document.getElementById('nav-starred')?.classList.add('selected');
+    loadArticles();
+}
+
+function filterDone() {
+    currentFilter = 'done';
+    selectedArticle = null;
+    clearNavSelection();
+    document.getElementById('nav-done')?.classList.add('selected');
+    loadArticles();
+}
+
+function filterFeed(id) {
+    currentFilter = id;
+    selectedArticle = null;
+    clearNavSelection();
+    document.querySelector(`.feed-item[data-id="${id}"]`)?.classList.add('selected');
+    loadArticles();
+}
+
+function setupSearch() {
+    let timer;
+    document.getElementById('search-input').addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(loadArticles, 300);
+    });
 }
 
 async function loadArticles() {
     try {
-        let url = `${API_BASE}/articles/?status_filter=${currentFilter}`;
-        if (currentFeedId && currentFeedId !== 'all') url += `&feed_id=${currentFeedId}`;
-        if (currentSearch) url += `&search=${encodeURIComponent(currentSearch)}`;
-        
-        const res = await fetch(url);
-        const articles = await res.json();
+        let url = `${API}/articles/?`;
+        if (currentFilter === 'starred') url += 'status_filter=starred';
+        else if (currentFilter === 'done') url += 'status_filter=done';
+        else if (currentFilter === 'all') url += 'status_filter=all';
+        else url += `status_filter=undone&feed_id=${currentFilter}`;
+        const q = document.getElementById('search-input').value.trim();
+        if (q) url += `&search=${encodeURIComponent(q)}`;
+        const r = await fetch(url);
+        articles = await r.json();
         renderArticles(articles);
-    } catch (err) {
-        console.error("Error loading articles", err);
-    }
+    } catch (e) { console.error('articles error', e); }
 }
 
 function renderArticles(articles) {
-    const list = document.getElementById('article-list');
-    list.innerHTML = '';
-    
-    if (articles.length === 0) {
-        list.innerHTML = '<div class="p-8 text-center text-slate-500 text-sm">No articles found.</div>';
+    const container = document.getElementById('article-rows');
+    if (!articles || articles.length === 0) {
+        container.innerHTML = '<div class="empty-state">No articles</div>';
         return;
     }
-
-    articles.forEach(article => {
-        const el = document.createElement('div');
-        const isRead = article.is_read;
-        el.className = `p-4 border-b border-slate-200 dark:border-slate-700 cursor-pointer transition-colors hover:bg-slate-100 dark:hover:bg-slate-700/50 ${isRead ? 'bg-slate-50 dark:bg-slate-800/80 opacity-80' : 'bg-white dark:bg-slate-800'}`;
-        if (selectedArticle && selectedArticle.id === article.id) {
-            el.classList.add('ring-2', 'ring-inset', 'ring-marine-500', 'bg-marine-50', 'dark:bg-marine-900/40');
-        }
-        
-        const date = new Date(article.published_date || article.added_at).toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
-        
-        const displayTitle = article.edited_title || article.title;
-        const displayDesc = stripHtml(article.edited_description || article.description || '');
-        
-        // Badges
-        let badges = '';
-        if (!isRead) badges += '<span class="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] uppercase font-bold mr-1">Unread</span>';
-        else badges += '<span class="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] uppercase font-bold mr-1">Read</span>';
-        
-        if (article.is_posted) badges += '<span class="inline-block px-1.5 py-0.5 rounded bg-[#ff5722] text-white text-[10px] uppercase font-bold mr-1">Posted</span>';
-        if (article.is_whatsapped) badges += '<span class="inline-block px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-[10px] uppercase font-bold mr-1">WA</span>';
-        if (article.is_done) badges += '<span class="inline-block px-1.5 py-0.5 rounded bg-marine-100 text-marine-700 text-[10px] uppercase font-bold mr-1">Done</span>';
-
-        let faviconImg = '';
-        if (article.feed_id) {
-            const feed = currentFeeds.find(f => f.id === article.feed_id);
-            if (feed) {
-                const domain = new URL(feed.url).hostname;
-                faviconImg = `<img src="https://www.google.com/s2/favicons?domain=${domain}&sz=32" class="w-3.5 h-3.5 rounded-sm" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2240%22 fill=%22%23cbd5e1%22/></svg>'">`;
-            } else {
-                faviconImg = '<div class="w-2 h-2 rounded-full bg-slate-400"></div>';
-            }
-        } else {
-            // Social / Manual import brand icon
-            const link = article.link || '';
-            if (link.includes('linkedin.com')) {
-                faviconImg = '<i class="fab fa-linkedin text-[#0a66c2] text-xs w-3.5 text-center"></i>';
-            } else if (link.includes('facebook.com') || link.includes('fb.watch') || link.includes('fb.com')) {
-                faviconImg = '<i class="fab fa-facebook text-[#1877f2] text-xs w-3.5 text-center"></i>';
-            } else if (link.includes('instagram.com') || link.includes('instagr.am')) {
-                faviconImg = '<i class="fab fa-instagram text-[#e1306c] text-xs w-3.5 text-center"></i>';
-            } else {
-                faviconImg = '<i class="fas fa-link text-slate-400 text-xs w-3.5 text-center"></i>';
-            }
-        }
-
-        el.innerHTML = `
-            <div class="flex justify-between items-baseline mb-1">
-                <div class="flex items-center gap-1.5 truncate mr-2">
-                    ${faviconImg}
-                    <span class="text-xs font-semibold text-marine-600 dark:text-marine-400 truncate">${getFeedTitle(article.feed_id, article.link)}</span>
+    articles = [...articles].sort((a, b) => {
+        const da = parseDate(a.published_date) || parseDate(a.added_at) || 0;
+        const db = parseDate(b.published_date) || parseDate(b.added_at) || 0;
+        return db - da;
+    });
+    const groups = groupByDay(articles);
+    let html = '';
+    function articleTag(a) {
+        const added = a.added_at ? (parseDate(a.added_at) || new Date(0)).getTime() : 0;
+        const updated = a.updated_at ? (parseDate(a.updated_at) || new Date(0)).getTime() : 0;
+        const diff = updated - added;
+        if (a.is_done) return '';
+        if (diff > 60000) return '<span class="tag-updated">UPDATED</span>';
+        if (added > Date.now() - 86400000) return '<span class="tag-new">NEW</span>';
+        return '';
+    }
+    for (const [label, items] of Object.entries(groups)) {
+        html += `<div class="day-header">${label}</div>`;
+        for (const a of items) {
+            const title = a.edited_title || a.title || 'Untitled';
+            const isUnread = !a.is_read && !a.is_done;
+            const feed = feeds.find(f => f.id === a.feed_id);
+            const feedName = feed ? feed.title : '';
+            const time = a.published_date || a.added_at || '';
+            const timeStr = time ? formatTime(time) : '';
+            const isActive = selectedArticle && selectedArticle.id === a.id;
+            const tag = articleTag(a);
+            html += `<div class="article-row ${isActive ? 'selected' : ''}" data-id="${a.id}">
+                <div class="title">${title}</div>
+                <div class="meta">
+                    <div class="dot ${isUnread ? 'unread' : ''}"></div>
+                    <span class="feed-name">${feedName}</span>
+                    ${tag ? tag : ''}
+                    <span class="time">${timeStr}</span>
                 </div>
-                <span class="text-xs text-slate-400 whitespace-nowrap">${date}</span>
-            </div>
-            <h3 class="text-slate-800 dark:text-slate-200 font-semibold leading-snug mb-1 text-sm ${!isRead ? 'text-black dark:text-white' : ''}">${displayTitle}</h3>
-            <div class="mb-1">${badges}</div>
-        `;
-        
-        el.onclick = () => openArticle(article);
-        list.appendChild(el);
+            </div>`;
+        }
+    }
+    container.innerHTML = html;
+    container.querySelectorAll('.article-row').forEach(el => {
+        el.addEventListener('click', () => {
+            const id = parseInt(el.dataset.id);
+            openArticle(articles.find(a => a.id === id));
+        });
     });
 }
 
-function getFeedTitle(id, link) {
-    if (!id) {
-        if (link && link.includes('linkedin.com')) return 'LinkedIn';
-        if (link && (link.includes('facebook.com') || link.includes('fb.watch') || link.includes('fb.com'))) return 'Facebook';
-        if (link && (link.includes('instagram.com') || link.includes('instagr.am'))) return 'Instagram';
-        return 'Manual Import';
+function parseDate(s) {
+    if (!s) return null;
+    const str = /^\d{4}-\d{2}-\d{2} /.test(s) ? s.replace(' ', 'T') : s;
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
+}
+function utcDay(date) {
+    return date.getUTCFullYear() * 10000 + (date.getUTCMonth() + 1) * 100 + date.getUTCDate();
+}
+function groupByDay(articles) {
+    const groups = {};
+    const now = new Date();
+    const todayKey = utcDay(now);
+    const yestKey = utcDay(new Date(now - 86400000));
+    for (const a of articles) {
+        const date = parseDate(a.published_date) || parseDate(a.added_at);
+        let label;
+        if (date) {
+            const k = utcDay(date);
+            if (k === todayKey) label = 'Today';
+            else if (k === yestKey) label = 'Yesterday';
+            else label = date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+        } else label = 'Unknown';
+        if (!groups[label]) groups[label] = [];
+        groups[label].push(a);
     }
-    const feed = currentFeeds.find(f => f.id === id);
-    return feed ? feed.title : 'Unknown';
+    return groups;
 }
 
-function stripHtml(html) {
-    const tmp = document.createElement("DIV");
-    tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || "";
+function formatTime(dateStr) {
+    const d = parseDate(dateStr);
+    if (!d) return '';
+    const now = new Date();
+    const diff = now - d;
+    if (diff < 3600000) return `${Math.round(diff / 60000)}m`;
+    if (diff < 86400000) return `${Math.round(diff / 3600000)}h`;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-async function openArticle(article) {
-    selectedArticle = article;
-    isEditMode = false;
-    
-    // Refresh list to highlight selected
-    loadArticles();
-    
-    const pane = document.getElementById('article-content-pane');
-    const toolbar = document.getElementById('article-toolbar');
-    
-    pane.classList.remove('hidden');
-    toolbar.classList.remove('hidden');
-    
-    updateToolbar();
-    renderArticleView();
-    
-    if (!article.is_read) {
-        try {
-            await fetch(`${API_BASE}/articles/${article.id}/status`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({status_type: 'read', value: true})
-            });
-            article.is_read = 1;
-        } catch (e) { console.error(e); }
-    }
-}
-
-function renderArticleView() {
-    const article = selectedArticle;
+function openArticle(article) {
     if (!article) return;
-    
-    document.getElementById('article-link').href = article.link;
-    document.getElementById('article-date').innerText = new Date(article.published_date || article.added_at).toLocaleString();
-    
-    const title = article.edited_title || article.title;
-    const desc = article.edited_description || article.description || '';
-    const content = article.edited_content || article.content || desc || 'No content available.';
-    
-    if (isEditMode) {
-        document.getElementById('viewer-mode').classList.add('hidden');
-        document.getElementById('editor-mode').classList.remove('hidden');
-        
-        document.getElementById('edit-title').value = title;
-        document.getElementById('edit-date-display').innerText = new Date(article.published_date || article.added_at).toLocaleString();
-        quill.setContents([]); // Clear first
-        quill.clipboard.dangerouslyPasteHTML(0, content);
-    } else {
-        document.getElementById('editor-mode').classList.add('hidden');
-        document.getElementById('viewer-mode').classList.remove('hidden');
-        
-        document.getElementById('article-title').innerText = title;
-        document.getElementById('article-body').innerHTML = content;
+    selectedArticle = article;
+    if (!article.is_read) {
+        article.is_read = 1;
+        fetch(`${API}/articles/${article.id}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status_type: 'read', value: true })
+        }).catch(() => {});
+        const row = document.querySelector(`.article-row[data-id="${article.id}"]`);
+        if (row) {
+            const dot = row.querySelector('.dot');
+            if (dot) dot.classList.remove('unread');
+        }
+        loadFeeds();
     }
+    document.querySelectorAll('.article-row').forEach(el => {
+        el.classList.toggle('selected', parseInt(el.dataset.id) === article.id);
+    });
+    const title = article.edited_title || article.title || 'Untitled';
+    const desc = article.edited_description || article.description || '';
+    const content = article.edited_content || article.content || desc || 'No content.';
+    const feed = feeds.find(f => f.id === article.feed_id);
+    const feedName = feed ? feed.title : '';
+    const date = article.published_date || article.added_at || '';
+    const dateStr = date ? new Date(date).toLocaleString() : '';
+    const visible = content.replace(/<[^>]*>/g, '').trim();
+    const isShort = visible.length > 0 && visible.length < 200;
+    const hint = (isShort && !article.fulltext_attempted && article.link && !article.link.startsWith('urn:')) ? `
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-size:13px;color:var(--fg2);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+            <i class="fas fa-info-circle" style="color:var(--accent);"></i>
+            This is only a short summary. <span id="hint-fetch" style="cursor:pointer;color:var(--accent);text-decoration:underline;">Fetch full text</span>
+        </div>` : '';
+    const pane = document.getElementById('article-content');
+    pane.innerHTML = `
+        <div class="article-headline" dir="rtl">${title}</div>
+        <div class="source-line">
+            from ${feedName} &nbsp; ${dateStr}
+            ${article.link ? `&nbsp; <a href="${article.link}" target="_blank" style="color:var(--accent);text-decoration:none;">Source</a>` : ''}
+        </div>
+        ${hint}
+        <div class="article-body" dir="rtl">${content}</div>
+    `;
+    const hintEl = document.getElementById('hint-fetch');
+    if (hintEl) hintEl.addEventListener('click', fetchFullText);
+    document.getElementById('pane-inner').scrollTop = 0;
     updateToolbar();
 }
 
 function updateToolbar() {
-    const article = selectedArticle;
-    if (!article) return;
-
-    // 1. Source Tag
-    const sourceTag = document.getElementById('article-source-tag');
-    let sourceHtml = '';
-    const isLinkedIn = !article.feed_id && article.link && article.link.includes('linkedin.com');
-    const isFacebook = !article.feed_id && article.link && (article.link.includes('facebook.com') || article.link.includes('fb.watch') || article.link.includes('fb.com'));
-    const isInstagram = !article.feed_id && article.link && (article.link.includes('instagram.com') || article.link.includes('instagr.am'));
-    
-    if (isLinkedIn) {
-        sourceHtml = '<i class="fab fa-linkedin-in text-[#0a66c2]"></i> LinkedIn Post';
-    } else if (isFacebook) {
-        sourceHtml = '<i class="fab fa-facebook-f text-[#1877f2]"></i> Facebook Post';
-    } else if (isInstagram) {
-        sourceHtml = '<i class="fab fa-instagram text-[#e1306c]"></i> Instagram Post';
-    } else if (!article.feed_id) {
-        sourceHtml = '<i class="fas fa-pen-nib text-slate-500"></i> Manual Entry';
-    } else {
-        sourceHtml = '<i class="fas fa-rss text-marine-500"></i> RSS Feed';
-    }
-    sourceTag.innerHTML = sourceHtml;
-
-    // Done articles hide the Unread toggle to maintain stability
-    const unreadBtn = document.getElementById('btn-unread');
-    if (article.is_done) {
-        unreadBtn.classList.add('hidden');
-    } else {
-        unreadBtn.classList.remove('hidden');
-        const unreadText = document.getElementById('btn-unread-text');
-        if(unreadText) unreadText.innerText = article.is_read ? 'Mark Unread' : 'Mark Read';
-    }
-    
-    // Posted (Dropdown Item)
-    const postedBtn = document.getElementById('btn-posted');
-    const postedSpan = postedBtn.querySelector('span');
-    if (article.is_posted) {
-        postedBtn.classList.add('bg-slate-100', 'dark:bg-slate-700');
-        if(postedSpan) postedSpan.innerHTML = 'Posted to Blogger <i class="fas fa-check text-[#ff5722] ml-1"></i>';
-    } else {
-        postedBtn.classList.remove('bg-slate-100', 'dark:bg-slate-700');
-        if(postedSpan) postedSpan.innerText = 'Mark Posted (Blogger)';
-    }
-
-    // Whatsapped (Dropdown Item)
-    const waBtn = document.getElementById('btn-whatsapped');
-    const waSpan = waBtn.querySelector('span');
-    if (article.is_whatsapped) {
-        waBtn.classList.add('bg-slate-100', 'dark:bg-slate-700');
-        if(waSpan) waSpan.innerHTML = 'Shared to WhatsApp <i class="fas fa-check text-green-600 ml-1"></i>';
-    } else {
-        waBtn.classList.remove('bg-slate-100', 'dark:bg-slate-700');
-        if(waSpan) waSpan.innerText = 'Mark Shared (WA)';
-    }
-
-    // Edit Toggle
-    const editBtn = document.getElementById('btn-edit-toggle');
-    const editBtnText = editBtn.querySelector('span');
-    if (isEditMode) {
-        if(editBtnText) editBtnText.innerText = 'Cancel Edit';
-        editBtn.classList.add('bg-slate-100', 'text-slate-700', 'dark:bg-slate-700', 'dark:text-slate-300');
-        editBtn.classList.remove('bg-marine-50', 'text-marine-700');
-    } else {
-        if(editBtnText) editBtnText.innerText = 'Edit Mode';
-        editBtn.classList.remove('bg-slate-100', 'text-slate-700', 'dark:bg-slate-700', 'dark:text-slate-300');
-        editBtn.classList.add('bg-marine-50', 'text-marine-700');
-    }
-
-    // Delete button logic: Show for Done articles AND social posts
-    const deleteBtn = document.getElementById('btn-delete-article');
-    const isSocial = !article.feed_id;
-    if (article.is_done || currentFilter === 'done' || isSocial) {
-        deleteBtn.classList.remove('hidden');
-    } else {
-        deleteBtn.classList.add('hidden');
-    }
+    const a = selectedArticle;
+    if (!a) return;
+    document.getElementById('btn-star-toggle').innerHTML = a.is_starred
+        ? '<i class="fas fa-star" style="color:#f59e0b;"></i> Starred'
+        : '<i class="far fa-star"></i> Star';
+    document.getElementById('btn-posted').innerHTML = a.is_posted
+        ? '<i class="fas fa-check" style="color:#2e9e3f;"></i> Posted'
+        : '<i class="fas fa-share-nodes" style="color:#ff5722;"></i> Blogger';
+    document.getElementById('btn-unread').innerHTML = a.is_read
+        ? '<i class="far fa-envelope-open"></i>'
+        : '<i class="far fa-envelope"></i>';
 }
 
-function toggleEditMode() {
-    isEditMode = !isEditMode;
-    renderArticleView();
-}
-
-async function updateArticleStatus(type) {
-    if (!selectedArticle) return;
-    
-    let targetValue = true;
-    let statusType = type;
-    
-    if (type === 'unread') {
-        statusType = 'read';
-        targetValue = !selectedArticle.is_read;
-    } else if (type === 'posted') {
-        targetValue = !selectedArticle.is_posted;
-    } else if (type === 'whatsapped') {
-        targetValue = !selectedArticle.is_whatsapped;
-    } else if (type === 'done') {
-        targetValue = !selectedArticle.is_done;
-    }
-    
+async function starArticle(id) {
+    if (!id) return;
     try {
-        const res = await fetch(`${API_BASE}/articles/${selectedArticle.id}/status`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({status_type: statusType, value: targetValue})
-        });
-        
-        if (res.ok) {
-            showToast(`Status updated: ${type} ${targetValue ? 'set' : 'removed'}`);
-            if (type === 'unread') selectedArticle.is_read = targetValue ? 1 : 0;
-            if (type === 'posted') selectedArticle.is_posted = targetValue ? 1 : 0;
-            if (type === 'whatsapped') selectedArticle.is_whatsapped = targetValue ? 1 : 0;
-            if (type === 'done') selectedArticle.is_done = targetValue ? 1 : 0;
-            
-            // UI Button Text Update for Unread/Read
-            if (type === 'unread') {
-                const unreadText = document.getElementById('btn-unread-text');
-                if (unreadText) unreadText.innerText = selectedArticle.is_read ? 'Mark Unread' : 'Mark Read';
-            }
-            
-            // Refresh current list depending on filter
-            if ((currentFilter === 'undone' && type === 'done') || 
-                (currentFilter === 'unread' && type === 'read') ||
-                (currentFilter === 'read' && type === 'unread')) {
-                // Remove from view
-                document.getElementById('article-content-pane').classList.add('hidden');
-                document.getElementById('article-toolbar').classList.add('hidden');
-                selectedArticle = null;
-            } else {
-                updateToolbar();
-            }
-            loadArticles();
+        const r = await fetch(`${API}/articles/${id}/star`, { method: 'POST' });
+        const data = await r.json();
+        const art = articles.find(a => a.id === id);
+        if (art) art.is_starred = data.is_starred ? 1 : 0;
+        if (selectedArticle?.id === id) selectedArticle.is_starred = data.is_starred ? 1 : 0;
+        updateToolbar();
+        showToast(data.is_starred ? 'Starred' : 'Unstarred');
+        if (currentFilter === 'starred' && !data.is_starred) {
+            articles = articles.filter(a => a.id !== id);
+            renderArticles(articles);
         }
-    } catch (e) {
-        showToast('Failed to update status', 'error');
-    }
+    } catch (e) { showToast('Failed', 'error'); }
 }
 
-async function saveArticleEdit() {
+async function publishToBlogger() {
     if (!selectedArticle) return;
-    
-    const title = document.getElementById('edit-title').value;
-    const desc = selectedArticle.edited_description || selectedArticle.description || '';
-    const content = quill.root.innerHTML;
-    
-    const btn = document.getElementById('btn-save');
-    const orig = btn.innerHTML;
-    btn.innerHTML = 'Saving...';
-    
+    if (selectedArticle.is_posted) { showToast('Already posted', 'error'); return; }
     try {
-        const res = await fetch(`${API_BASE}/articles/${selectedArticle.id}`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({title, description: desc, content})
-        });
-        
-        if (res.ok) {
-            showToast('Modifications saved!');
-            selectedArticle.edited_title = title;
-            selectedArticle.edited_description = desc;
-            selectedArticle.edited_content = content;
-            // No longer moving to Done automatically
-            
-            isEditMode = false;
-            renderArticleView();
-            loadArticles();
+        const r = await fetch(`${API}/articles/${selectedArticle.id}/publish-blogger`, { method: 'POST' });
+        const data = await r.json();
+        if (data.success) {
+            selectedArticle.is_posted = 1;
+            updateToolbar();
+            loadFeeds();
+            showToast('Posted to Blogger!');
         } else {
-             showToast('Failed to save.', 'error');
+            showToast(data.error || 'Publish failed', 'error');
         }
-    } catch (e) {
-        showToast('Network error.', 'error');
-    } finally {
-        btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Save Modifications`;
-    }
+    } catch (e) { showToast('Network error', 'error'); }
 }
 
-function copyArticleHtml() {
+async function updateStatus(type) {
     if (!selectedArticle) return;
-    
-    let content = '';
-    if (isEditMode) {
-        content = quill.root.innerHTML;
-    } else {
-        content = document.getElementById('article-body').innerHTML;
-    }
-    
-    navigator.clipboard.writeText(content).then(() => {
-        showToast('HTML content copied to clipboard!');
-    }).catch(err => {
-        console.error('Failed to copy: ', err);
-        showToast('Failed to copy HTML.', 'error');
+    let statusType = type;
+    let value = true;
+    if (type === 'unread') { statusType = 'read'; value = !selectedArticle.is_read; }
+    else if (type === 'done') value = !selectedArticle.is_done;
+    try {
+        const r = await fetch(`${API}/articles/${selectedArticle.id}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status_type: statusType, value })
+        });
+        if (r.ok) {
+            showToast(`${type}: ${value ? 'on' : 'off'}`);
+            if (type === 'done') {
+                selectedArticle.is_done = value ? 1 : 0;
+                if (value && currentFilter !== 'done') {
+                    articles = articles.filter(a => a.id !== selectedArticle.id);
+                    renderArticles(articles);
+                    document.getElementById('article-content').innerHTML = '<div class="empty-state">Select an article to read</div>';
+                    selectedArticle = null;
+                    loadFeeds();
+                    return;
+                }
+            }
+            if (type === 'unread') {
+                selectedArticle.is_read = value ? 1 : 0;
+                updateToolbar();
+                renderArticles(articles);
+            }
+            loadFeeds();
+        }
+    } catch (e) { showToast('Failed', 'error'); }
+}
+
+function copyHTML() {
+    if (!selectedArticle) return;
+    const body = document.querySelector('.article-body');
+    if (body) navigator.clipboard.writeText(body.innerHTML).then(() => showToast('HTML copied!')).catch(() => showToast('Failed', 'error'));
+}
+
+async function fetchFullText() {
+    if (!selectedArticle) return;
+    if (!selectedArticle.link || selectedArticle.link.startsWith('urn:')) { showToast('No source URL available', 'error'); return; }
+    const btn = document.getElementById('btn-fulltext');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    try {
+        const r = await fetch(`${API}/articles/${selectedArticle.id}/fulltext`, { method: 'POST' });
+        const data = await r.json();
+        if (r.ok && data.success) {
+            selectedArticle.description = data.description;
+            selectedArticle.fulltext_attempted = 1;
+            openArticle(selectedArticle);
+            showToast(data.upgraded ? `Full text fetched (${data.length} chars)` : 'Content unchanged');
+        } else {
+            showToast(data.detail || 'Extraction failed', 'error');
+        }
+    } catch (e) { showToast('Network error', 'error'); }
+    btn.innerHTML = orig;
+}
+
+async function deleteCurrentArticle() {
+    if (!selectedArticle || !confirm('Delete this article?')) return;
+    try {
+        const r = await fetch(`${API}/articles/${selectedArticle.id}`, { method: 'DELETE' });
+        if (r.ok) {
+            showToast('Deleted');
+            articles = articles.filter(a => a.id !== selectedArticle.id);
+            renderArticles(articles);
+            document.getElementById('article-content').innerHTML = '<div class="empty-state">Select an article to read</div>';
+            selectedArticle = null;
+            loadFeeds();
+        }
+    } catch (e) { showToast('Failed', 'error'); }
+}
+
+function setupSyncBtn() {
+    document.getElementById('sync-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('sync-btn');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        try {
+            const r = await fetch(`${API}/sync/`, { method: 'POST' });
+            if (r.ok) {
+                const data = await r.json();
+                const msg = data.new_articles_count || data.updated_articles_count
+                    ? `${data.new_articles_count || 0} new, ${data.updated_articles_count || 0} updated`
+                    : 'No new articles';
+                showToast(msg);
+            } else showToast('Sync failed', 'error');
+        } catch (e) { showToast('Network error', 'error'); }
+        btn.innerHTML = '<i class="fas fa-sync-alt"></i>';
+        await Promise.all([loadFeeds(), loadArticles()]);
     });
 }
 
-async function deleteArticle() {
-    if (!selectedArticle) return;
-    if (!confirm('Are you sure you want to permanently delete this article?')) return;
-    
-    try {
-        const res = await fetch(`${API_BASE}/articles/${selectedArticle.id}`, { method: 'DELETE' });
-        if (res.ok) {
-            showToast('Article deleted.');
-            document.getElementById('article-content-pane').classList.add('hidden');
-            document.getElementById('article-toolbar').classList.add('hidden');
-            selectedArticle = null;
-            await loadArticles();
-        } else {
-            showToast('Failed to delete article.', 'error');
+function setupAddFeed() {
+    document.getElementById('btn-add-feed').addEventListener('click', () => {
+        showAddFeedProperties('', '');
+    });
+}
+
+function setupAddFolder() {
+    document.getElementById('btn-add-folder').addEventListener('click', () => {
+        const name = prompt('Folder name:');
+        if (!name) return;
+        fetch(`${API}/folders/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) })
+            .then(r => r.ok ? (showToast('Folder created!'), loadFolders()) : r.json().then(e => showToast(e.detail || 'Failed', 'error')))
+            .catch(() => showToast('Network error', 'error'));
+    });
+}
+
+async function loadFolders() {
+    try { const r = await fetch(`${API}/folders/`); folders = await r.json(); } catch (e) { folders = []; }
+}
+
+function setupResize() {
+    const handle = document.getElementById('resize-handle');
+    const list = document.getElementById('article-list-pane');
+    const saved = localStorage.getItem('listWidth');
+    if (saved) list.style.width = saved + 'px';
+    handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        handle.classList.add('active');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        const startX = e.clientX;
+        const startW = list.offsetWidth;
+        function onMove(ev) {
+            const w = Math.max(180, Math.min(700, startW + ev.clientX - startX));
+            list.style.width = w + 'px';
         }
-    } catch (err) {
-        showToast('Network error.', 'error');
-    }
+        function onUp() {
+            handle.classList.remove('active');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            localStorage.setItem('listWidth', list.offsetWidth);
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        }
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+}
+
+function setupSettings() {
+    const modal = document.getElementById('settings-modal');
+    const openBtn = document.getElementById('btn-settings');
+    const closeBtn = document.getElementById('modal-close');
+    const saveBtn = document.getElementById('btn-save-blogger');
+    const connectBtn = document.getElementById('btn-connect-blogger');
+
+    openBtn.addEventListener('click', () => {
+        modal.style.display = 'flex';
+        fetch(`${API}/blogger-config`).then(r => r.json()).then(cfg => {
+            document.getElementById('b-client-id').value = cfg.client_id || '';
+            document.getElementById('b-client-secret').value = '';
+            document.getElementById('b-blog-id').value = cfg.blog_id || '';
+            const status = document.getElementById('blogger-status');
+            if (cfg.connected) status.innerHTML = '<span style="color:#16a34a;">Connected</span>';
+            else status.textContent = 'Not connected';
+        });
+    });
+    closeBtn.addEventListener('click', () => modal.style.display = 'none');
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+
+    saveBtn.addEventListener('click', async () => {
+        const payload = {
+            client_id: document.getElementById('b-client-id').value.trim(),
+            client_secret: document.getElementById('b-client-secret').value.trim(),
+            blog_id: document.getElementById('b-blog-id').value.trim(),
+            access_token: '', refresh_token: ''
+        };
+        await fetch(`${API}/blogger-config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        showToast('Blogger settings saved');
+    });
+
+    connectBtn.addEventListener('click', async () => {
+        const resp = await fetch(`${API}/blogger/auth-url`);
+        if (!resp.ok) { showToast('Save Client ID first', 'error'); return; }
+        const data = await resp.json();
+        window.open(data.auth_url, '_blank', 'width=600,height=700');
+    });
+}
+
+function setupFeedContextMenu() {
+    const menu = document.getElementById('context-menu');
+    document.addEventListener('contextmenu', (e) => {
+        const item = e.target.closest('.feed-item');
+        if (!item) { menu.style.display = 'none'; return; }
+        e.preventDefault();
+        const id = parseInt(item.dataset.id);
+        const feed = feeds.find(f => f.id === id);
+        if (!feed) return;
+        menu.innerHTML = `
+            <div class="cm-item" data-action="mark-read">Mark all items as read</div>
+            <div class="cm-item" data-action="rename">Rename</div>
+            <div class="cm-item" data-action="delete">Delete</div>
+            <div class="cm-item" data-action="sync">Update feed</div>
+            <hr class="cm-sep">
+            <div class="cm-item" data-action="properties">Properties</div>
+        `;
+        menu.style.display = 'block';
+        menu.style.left = Math.min(e.clientX, window.innerWidth - 190) + 'px';
+        menu.style.top = Math.min(e.clientY, window.innerHeight - 220) + 'px';
+        menu._feedId = id;
+    });
+    menu.addEventListener('click', async (e) => {
+        const action = e.target.dataset.action;
+        if (!action) return;
+        const id = menu._feedId;
+        menu.style.display = 'none';
+        if (action === 'mark-read') {
+            await fetch(`${API}/feeds/${id}/mark-read`, { method: 'POST' });
+            showToast('All marked as read');
+            await Promise.all([loadFeeds(), loadArticles()]);
+        } else if (action === 'delete') {
+            if (!confirm('Delete this feed and its articles?')) return;
+            await fetch(`${API}/feeds/${id}`, { method: 'DELETE' });
+            showToast('Feed deleted');
+            document.getElementById('article-rows').innerHTML = '<div class="empty-state">No articles</div>';
+            document.getElementById('article-content').innerHTML = '<div class="empty-state">Select an article to read</div>';
+            selectedArticle = null;
+            await Promise.all([loadFeeds(), loadArticles()]);
+        } else if (action === 'rename') {
+            const feed = feeds.find(f => f.id === id);
+            const name = prompt('New name:', feed ? feed.title : '');
+            if (name && name.trim()) {
+                await fetch(`${API}/feeds/${id}/rename`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: name.trim() })
+                });
+                showToast('Feed renamed');
+    await Promise.all([loadFeeds(), loadArticles(), loadFolders()]);
+            }
+        } else if (action === 'sync') {
+            const r = await fetch(`${API}/feeds/${id}/sync`, { method: 'POST' });
+            if (r.ok) {
+                const data = await r.json();
+                const msg = data.new_articles_count || data.updated_articles_count
+                    ? `${data.new_articles_count || 0} new, ${data.updated_articles_count || 0} updated`
+                    : 'No new articles';
+                showToast(msg);
+            } else showToast('Sync failed', 'error');
+            await Promise.all([loadFeeds(), loadArticles()]);
+            filterFeed(id);
+        } else if (action === 'properties') {
+            showFeedProperties(id);
+        }
+    });
+    document.addEventListener('click', () => { menu.style.display = 'none'; });
+}
+
+function showFeedProperties(id) {
+    const feed = feeds.find(f => f.id === id);
+    if (!feed) return;
+    showPropsModal(feed, false, id);
+}
+
+async function showAddFeedProperties(url, title) {
+    await loadFolders();
+    const feed = { url: url || '', title: title || '', max_entries: 20, scan_interval: 0, folder_id: null, proxy: '', username: '', password: '', full_text: 1 };
+    showPropsModal(feed, true, null);
+}
+
+function showPropsModal(feed, isNew, editId) {
+    const modal = document.getElementById('props-modal');
+    const body = document.getElementById('props-body');
+    const latestStr = isNew ? '—' : (() => {
+        const published = articles.filter(a => a.feed_id === editId && a.published_date).sort((a, b) => (parseDate(b.published_date) || 0) - (parseDate(a.published_date) || 0));
+        const latest = published[0];
+        if (!latest) return 'N/A';
+        const diff = Date.now() - new Date(latest.published_date).getTime();
+        const m = Math.round(diff / 60000);
+        return m < 1 ? 'just now' : m + ' minutes';
+    })();
+    const entryOptions = [1,5,10,20,50,100,200,500,1000];
+    const intervalOptions = [0,1,2,3,4,5,10,15,20,30,45,60];
+    const folderOpts = [{id:null, name:'Root'}, ...folders];
+    body.innerHTML = `
+        <div class="props-row"><span class="props-label">Feed URL</span><span class="props-value" style="display:flex;gap:6px;flex-wrap:wrap;"><input class="settings-input" id="prop-url" value="${(feed.url||'').replace(/"/g,'&quot;')}" style="flex:1;min-width:150px;" /><button class="settings-btn" id="prop-load">Load</button></span></div>
+        <div id="prop-results-wrap"></div>
+        <div class="props-row"><span class="props-label">Title</span><span class="props-value"><input class="settings-input" id="prop-title" value="${(feed.title||'').replace(/"/g,'&quot;')}" /></span></div>
+        <div class="props-row"><span class="props-label">Latest entry posted</span><span class="props-value">${latestStr}</span></div>
+        <div class="props-row"><span class="props-label">Status</span><span class="props-value" style="color:#16a34a;">OK</span></div>
+        <div class="props-row"><span class="props-label">Maximum entries to save</span><span class="props-value"><select class="settings-input" id="prop-entries">${entryOptions.map(v => `<option value="${v}" ${(feed.max_entries||20)==v?'selected':''}>${v}</option>`).join('')}</select></span></div>
+        <div class="props-row"><span class="props-label">Scan interval</span><span class="props-value"><select class="settings-input" id="prop-interval">${intervalOptions.map(v => `<option value="${v}" ${(feed.scan_interval||0)==v?'selected':''}>${v===0?'Manual':v+' min'}</option>`).join('')}</select></span></div>
+        <div class="props-row"><span class="props-label">Auto full text</span><span class="props-value"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="prop-fulltext" ${(feed.full_text===undefined || feed.full_text) ? 'checked' : ''} /> Fetch full article text when the summary is short</label></span></div>
+        <div class="props-row"><span class="props-label">Folder</span><span class="props-value"><select class="settings-input" id="prop-folder">${folderOpts.map(fo => `<option value="${fo.id===null?'':fo.id}" ${(feed.folder_id||'')==(fo.id||'')?'selected':''}>${fo.name}</option>`).join('')}</select></span></div>
+        <div class="props-row"><span class="props-label">Proxy</span><span class="props-value"><select class="settings-input" id="prop-proxy"><option value="" ${!feed.proxy?'selected':''}>None</option><option value="feedly" ${feed.proxy==='feedly'?'selected':''}>Feedly</option></select></span></div>
+        <div class="props-row"><span class="props-label">Username</span><span class="props-value"><input class="settings-input" id="prop-username" value="${(feed.username||'').replace(/"/g,'&quot;')}" /></span></div>
+        <div class="props-row"><span class="props-label">Password</span><span class="props-value"><input class="settings-input" id="prop-password" type="password" value="${(feed.password||'').replace(/"/g,'&quot;')}" /></span></div>
+        <div style="text-align:right;margin-top:12px;"><button class="settings-btn" id="prop-save" style="background:var(--accent);color:#fff;">${isNew ? 'Add Feed' : 'Save'}</button></div>
+    `;
+    modal.style.display = 'flex';
+    document.getElementById('props-close').onclick = () => modal.style.display = 'none';
+    modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+    document.getElementById('prop-load').addEventListener('click', async () => {
+        const url = document.getElementById('prop-url').value.trim();
+        if (!url) return;
+        try {
+            const r = await fetch(`${API}/discover-feeds?url=${encodeURIComponent(url)}`);
+            if (!r.ok) { showToast('No feeds found', 'error'); return; }
+            const discovered = await r.json();
+            const wrap = document.getElementById('prop-results-wrap');
+            if (discovered.length === 1) {
+                wrap.innerHTML = '';
+                document.getElementById('prop-url').value = discovered[0].url;
+                document.getElementById('prop-title').value = discovered[0].title;
+            } else {
+                wrap.innerHTML = '<div class="prop-results">' + discovered.map((f, i) =>
+                    `<div class="pr-item" data-idx="${i}">${f.title || f.url}</div>`
+                ).join('') + '</div>';
+                wrap.querySelectorAll('.pr-item').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const f = discovered[parseInt(el.dataset.idx)];
+                        document.getElementById('prop-url').value = f.url;
+                        document.getElementById('prop-title').value = f.title || f.url;
+                        wrap.innerHTML = '';
+                    });
+                });
+            }
+        } catch (e) { showToast('Discovery failed', 'error'); }
+    });
+    document.getElementById('prop-save').addEventListener('click', async () => {
+        const payload = {
+            url: document.getElementById('prop-url').value.trim(),
+            title: document.getElementById('prop-title').value.trim(),
+            max_entries: parseInt(document.getElementById('prop-entries').value) || 20,
+            scan_interval: parseInt(document.getElementById('prop-interval').value) || 0,
+            folder_id: document.getElementById('prop-folder').value || null,
+            proxy: document.getElementById('prop-proxy').value,
+            username: document.getElementById('prop-username').value,
+            password: document.getElementById('prop-password').value,
+            full_text: document.getElementById('prop-fulltext').checked ? 1 : 0
+        };
+        if (isNew) {
+            const r = await fetch(`${API}/feeds/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (r.ok) {
+                const data = await r.json();
+                showToast(`Feed added! ${data.imported || 0}/${data.entries_found || 0} articles`);
+            } else {
+                const err = await r.json();
+                showToast(err.detail || 'Failed', 'error');
+                return;
+            }
+        } else {
+            await fetch(`${API}/feeds/${editId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            showToast('Properties saved');
+        }
+        modal.style.display = 'none';
+        await Promise.all([loadFeeds(), loadArticles()]);
+    });
+}
+
+function showToast(msg, type = 'success') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = msg;
+    container.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 2500);
 }

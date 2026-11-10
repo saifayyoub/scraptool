@@ -1,0 +1,10 @@
+# Local secrets / generated files - never commit these
+Credentials/
+backend/blogger_config.json
+backend/server.log
+backend/server.prev.log
+
+# Environment and caches
+backend/venv/
+__pycache__/
+*.pyc

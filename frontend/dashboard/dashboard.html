@@ -1,165 +1,188 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduFeed Dashboard</title>
-    <meta name="description" content="Real-time analytics and curation overview for EduFeed.">
-    <link rel="stylesheet" href="dashboard.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Chart.js for data visualization -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduFeed Dashboard</title>
+<meta name="description" content="Analytics for EduFeed">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="stylesheet" href="dashboard.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="dashboard-container">
-        <!-- Sidebar -->
-        <aside class="sidebar">
-            <div class="logo-section">
-                <i class="fas fa-feather-pointed fa-spin-slow"></i>
-                <span style="margin-left: 10px;">EDUFEED</span>
-            </div>
-            
-            <nav class="nav-links">
-                <div class="nav-item">
-                    <a href="../index.html" class="nav-link">
-                        <i class="fas fa-newspaper"></i>
-                        <span>Article Reader</span>
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="#" class="nav-link active">
-                        <i class="fas fa-chart-pie"></i>
-                        <span>Dashboard</span>
-                    </a>
-                </div>
-            </nav>
+<div class="dashboard-container">
+<aside class="sidebar">
+<div class="logo-section"><i class="fas fa-feather-pointed fa-spin-slow"></i><span style="margin-left:10px">EDUFEED</span></div>
+<nav class="nav-links">
+<div class="nav-item"><a href="../index.html" class="nav-link"><i class="fas fa-newspaper"></i><span>Article Reader</span></a></div>
+<div class="nav-item"><a href="#" class="nav-link active"><i class="fas fa-chart-pie"></i><span>Dashboard</span></a></div>
+</nav>
+</aside>
+<main class="main-content">
+<header>
+<div class="header-left">
+<button id="sidebar-toggle" class="btn-glass" style="padding:0.5rem 0.8rem;display:none"><i class="fas fa-bars"></i></button>
+<form id="search-form" style="display:flex;flex:1"><input type="text" id="dashboard-search" class="search-bar" placeholder="Search your articles..."></form>
+</div>
+<div class="header-right"><button class="btn-glass" title="Toggle Theme" id="theme-toggle"><i class="fas fa-moon" id="theme-icon"></i></button></div>
+</header>
+<div class="content-body">
+<section class="animate-fade-in" style="margin-bottom:2.5rem;display:flex;justify-content:space-between;align-items:flex-end">
+<div><h1 style="font-size:2rem;font-weight:700;margin-bottom:0.5rem">Curation Dashboard</h1><p style="color:var(--text-muted)">All-time analytics for your EduFeed content.</p></div>
+<div id="connection-status" class="btn-glass" style="font-size:0.75rem;padding:0.4rem 0.8rem;pointer-events:none"><i class="fas fa-circle" style="color:var(--accent-danger);margin-right:5px;font-size:0.6rem"></i> Offline</div>
+</section>
 
-        </aside>
+<div class="kpi-grid">
+<div class="card kpi-card animate-fade-in" style="animation-delay:0.05s">
+<div class="kpi-icon" style="background:rgba(139,92,246,0.12);color:#8b5cf6"><i class="fas fa-newspaper"></i></div>
+<div class="kpi-body"><div class="kpi-label">Total Articles</div><div class="kpi-value" id="total-articles">--</div><div class="kpi-trend" id="total-articles-trend"></div></div>
+</div>
+<div class="card kpi-card animate-fade-in" style="animation-delay:0.1s">
+<div class="kpi-icon" style="background:rgba(16,185,129,0.12);color:#10b981"><i class="fas fa-check-double"></i></div>
+<div class="kpi-body"><div class="kpi-label">Done</div><div class="kpi-value" id="done-posts">--</div><div class="kpi-trend" id="done-trend"><span id="done-pct">--</span> done rate</div></div>
+</div>
+<div class="card kpi-card animate-fade-in" style="animation-delay:0.15s">
+<div class="kpi-icon" style="background:rgba(239,68,68,0.12);color:#ef4444"><i class="fas fa-hourglass-half"></i></div>
+<div class="kpi-body"><div class="kpi-label">Undone / Unread</div><div class="kpi-value"><span id="undone-posts">--</span><span style="font-size:1rem;color:var(--text-muted);margin:0 4px">/</span><span id="unread-posts">--</span></div><div class="kpi-trend"><span id="new-today">--</span> new today</div></div>
+</div>
+<div class="card kpi-card animate-fade-in" style="animation-delay:0.2s">
+<div class="kpi-icon" style="background:rgba(6,182,212,0.12);color:#06b6d4"><i class="fas fa-chart-line"></i></div>
+<div class="kpi-body"><div class="kpi-label">Completion Rate</div><div class="kpi-value" id="completion-rate">--%</div><div class="kpi-trend"><span id="done-this-week">--</span> done this week</div></div>
+</div>
+<div class="card kpi-card animate-fade-in" style="animation-delay:0.25s">
+<div class="kpi-icon" style="background:rgba(255,87,34,0.12);color:#ff5722"><i class="fas fa-share-nodes"></i></div>
+<div class="kpi-body"><div class="kpi-label">Posted</div><div class="kpi-value"><span id="posted-count">--</span><span style="font-size:0.9rem;color:var(--text-muted);margin:0 3px">/</span><span id="posted-rate" style="font-size:0.9rem">--</span></div><div class="kpi-trend"><span id="posted-today">--</span> posted today</div></div>
+</div>
+<div class="card kpi-card animate-fade-in" style="animation-delay:0.3s">
+<div class="kpi-icon" style="background:rgba(37,211,102,0.12);color:#25D366"><i class="fab fa-whatsapp"></i></div>
+<div class="kpi-body"><div class="kpi-label">WhatsApped</div><div class="kpi-value"><span id="whatsapped-count">--</span><span style="font-size:0.9rem;color:var(--text-muted);margin:0 3px">/</span><span id="whatsapped-rate" style="font-size:0.9rem">--</span></div><div class="kpi-trend"><span id="whatsapped-today">--</span> shared today</div></div>
+</div>
+<div class="card kpi-card animate-fade-in" style="animation-delay:0.35s">
+<div class="kpi-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b"><i class="fas fa-rss"></i></div>
+<div class="kpi-body"><div class="kpi-label">Feeds</div><div class="kpi-value"><span id="total-feeds">--</span><span style="font-size:1rem;color:var(--text-muted);margin:0 4px">/</span><span id="active-feeds">--</span></div><div class="kpi-trend"><span id="avg-per-feed">--</span> avg / feed</div></div>
+</div>
+<div class="card kpi-card animate-fade-in" style="animation-delay:0.4s">
+<div class="kpi-icon" style="background:rgba(99,102,241,0.12);color:#6366f1"><i class="fas fa-sync"></i></div>
+<div class="kpi-body"><div class="kpi-label">Updated Today</div><div class="kpi-value" id="updated-today">--</div><div class="kpi-trend"><span id="zero-engagement">--</span> never touched</div></div>
+</div>
+<div class="card kpi-card animate-fade-in" style="animation-delay:0.45s">
+<div class="kpi-icon" style="background:rgba(139,92,246,0.12);color:#8b5cf6"><i class="fas fa-eye"></i></div>
+<div class="kpi-body"><div class="kpi-label">Read Rate</div><div class="kpi-value" id="read-rate">--%</div><div class="kpi-trend"><span id="read-rate-articles">--</span> read</div></div>
+</div>
+<div class="card kpi-card animate-fade-in" style="animation-delay:0.5s">
+<div class="kpi-icon" style="background:rgba(255,87,34,0.12);color:#ff5722"><i class="fas fa-share-alt"></i></div>
+<div class="kpi-body"><div class="kpi-label">Social Share Rate</div><div class="kpi-value" id="social-share-rate">--%</div><div class="kpi-trend"><span id="social-share-count">--</span> shared</div></div>
+</div>
+<div class="card kpi-card animate-fade-in" style="animation-delay:0.55s">
+<div class="kpi-icon" style="background:rgba(16,185,129,0.12);color:#10b981"><i class="fas fa-calendar-plus"></i></div>
+<div class="kpi-body"><div class="kpi-label">New This Week</div><div class="kpi-value" id="new-this-week">--</div><div class="kpi-trend">articles added this week</div></div>
+</div>
+<div class="card kpi-card animate-fade-in" style="animation-delay:0.6s">
+<div class="kpi-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b"><i class="fas fa-rocket"></i></div>
+<div class="kpi-body"><div class="kpi-label">Weekly Momentum</div><div class="kpi-value" id="weekly-momentum">--</div><div class="kpi-trend"><span id="momentum-this-week">--</span> this week vs <span id="momentum-last-week">--</span> last</div></div>
+</div>
+</div>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <header>
-                <div class="header-left">
-                    <button id="sidebar-toggle" class="btn-glass" style="padding: 0.5rem 0.8rem; display: none;">
-                        <i class="fas fa-bars"></i>
-                    </button>
-                    <form id="search-form" style="display: flex; flex: 1;">
-                        <input type="text" id="dashboard-search" class="search-bar" placeholder="Search your articles...">
-                    </form>
-                </div>
-                <div class="header-right">
-                    <button class="btn-glass" title="Toggle Theme" id="theme-toggle">
-                        <i class="fas fa-moon" id="theme-icon"></i>
-                    </button>
-                </div>
-            </header>
+<div class="main-grid">
+<div class="card animate-fade-in" style="animation-delay:0.5s">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem"><h3 style="font-weight:600">Curation Progress</h3><select id="period-select" class="btn-glass" style="font-size:0.8rem;padding:0.4rem 0.8rem"><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option><option value="all">All Time</option></select></div>
+<div style="height:300px"><canvas id="curationChart"></canvas></div>
+</div>
+<div class="card animate-fade-in" style="animation-delay:0.55s"><h3 style="font-weight:600;margin-bottom:1.5rem">Recent Activity</h3><div id="activity-feed-container" style="display:flex;flex-direction:column;gap:1.2rem"></div></div>
+</div>
+<div class="main-grid sub-grid" style="margin-top:1.5rem;grid-template-columns:1fr 1fr 2fr">
+<div class="card animate-fade-in" style="animation-delay:0.6s"><h3 style="font-weight:600;margin-bottom:1.5rem">Social Imports</h3><div style="height:200px;display:flex;justify-content:center;align-items:center;position:relative"><canvas id="socialImportsChart"></canvas></div><div id="social-imports-stats" style="display:flex;flex-direction:column;gap:0.8rem;margin-top:1.5rem"></div></div>
+<div class="card animate-fade-in" style="animation-delay:0.65s"><h3 style="font-weight:600;margin-bottom:1.5rem">Status Overview</h3><div style="height:250px"><canvas id="statusChart"></canvas></div></div>
+<div class="card animate-fade-in" style="animation-delay:0.7s"><h3 style="font-weight:600;margin-bottom:1.5rem">Distribution Timeline</h3><div style="height:250px"><canvas id="distributionChart"></canvas></div></div>
+</div>
 
-            <div class="content-body">
-                <section class="animate-fade-in" style="margin-bottom: 2.5rem; display: flex; justify-content: space-between; align-items: flex-end;">
-                    <div>
-                        <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem;">Curation Dashboard</h1>
-                        <p style="color: var(--text-muted);">Real-time overview of your EduFeed content and social distribution.</p>
-                    </div>
-                    <div id="connection-status" class="btn-glass" style="font-size: 0.75rem; padding: 0.4rem 0.8rem; pointer-events: none;">
-                        <i class="fas fa-circle" style="color: var(--accent-danger); margin-right: 5px; font-size: 0.6rem;"></i>
-                        Backend Offline
-                    </div>
-                </section>
+<div class="card animate-fade-in" style="margin-top:1.5rem;animation-delay:0.75s"><h3 style="font-weight:600;margin-bottom:1.5rem">Per-Feed Breakdown</h3><div style="overflow-x:auto"><table class="feed-table"><thead><tr><th>Feed</th><th>Total</th><th>Done</th><th>% Done</th><th>Posted</th><th>WhatsApp</th></tr></thead><tbody id="feed-table-body"></tbody></table></div></div>
+</div>
+</main>
+</div>
 
-                <!-- Stats Grid -->
-                <div class="grid-container">
-                    <div class="card stat-card animate-fade-in" style="animation-delay: 0.1s;">
-                        <div class="stat-label">TOTAL FEEDS</div>
-                        <div class="stat-value" id="total-feeds">---</div>
-                        <div class="stat-delta delta-up">
-                            <i class="fas fa-rss"></i>
-                            <span id="feeds-delta">--- added this week</span>
-                        </div>
-                    </div>
-                    <div class="card stat-card animate-fade-in" style="animation-delay: 0.2s;">
-                        <div class="stat-label">UNDONE POSTS</div>
-                        <div class="stat-value" id="undone-posts">---</div>
-                        <div class="stat-delta delta-down">
-                            <i class="fas fa-clock"></i>
-                            <span id="articles-delta">--- new today</span>
-                        </div>
-                    </div>
-                    <div class="card stat-card animate-fade-in" style="animation-delay: 0.3s;">
-                        <div class="stat-label">COMPLETION RATE</div>
-                        <div class="stat-value" id="completion-rate">---%</div>
-                        <div class="stat-delta delta-up">
-                            <i class="fas fa-check-double"></i>
-                            <span id="done-posts-count">--- done articles</span>
-                        </div>
-                    </div>
-                    <div class="card stat-card animate-fade-in" style="animation-delay: 0.4s;">
-                        <div class="stat-label">DISTRIBUTION</div>
-                        <div style="display: flex; gap: 15px; margin-top: 5px;">
-                            <div title="Whatsapped">
-                                <i class="fab fa-whatsapp" style="color: #25D366;"></i>
-                                <span style="font-weight: 600;" id="whatsapped-count">---</span>
-                            </div>
-                            <div title="Posted">
-                                <i class="fas fa-share-nodes" style="color: var(--accent-secondary);"></i>
-                                <span style="font-weight: 600;" id="posted-count">---</span>
-                            </div>
-                        </div>
-                        <div class="stat-delta">
-                            <span>Shared to Socials</span>
-                        </div>
-                    </div>
-                </div>
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+var t=document.getElementById('theme-toggle'),ti=document.getElementById('theme-icon');
+function it(){var e=localStorage.getItem('theme')==='dark'||(!('theme'in localStorage)&&window.matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.classList.toggle('dark',e);if(ti)ti.className=e?'fas fa-sun':'fas fa-moon'}
+if(t)t.addEventListener('click',function(){var e=document.documentElement.classList.toggle('dark');localStorage.setItem('theme',e?'dark':'light');if(ti)ti.className=e?'fas fa-sun':'fas fa-moon';rc()});it();
+var sf=document.getElementById('search-form');
+if(sf)sf.addEventListener('submit',function(e){e.preventDefault();var q=document.getElementById('dashboard-search');if(q&&q.value)window.location.href='../index.html?search='+encodeURIComponent(q.value)});
+var sbtn=document.getElementById('sidebar-toggle'),sb=document.querySelector('.sidebar');if(sbtn&&sb)sbtn.addEventListener('click',function(){sb.classList.toggle('active')});
+var ps=document.getElementById('period-select');if(ps)ps.addEventListener('change',function(){u()});
+var cc=null,sc=null,dc=null,stc=null;
+function id(){return document.documentElement.classList.contains('dark')}
+function tc(){return id()?'#94a3b8':'#64748b'}
+function gc(){return id()?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'}
+function rc(){if(ld)ra(ld)}
+var ld=null;
+function $(i){return document.getElementById(i)}
 
-                <!-- Main Grid -->
-                <div class="main-grid">
-                    <!-- Revenue Chart Card -->
-                    <div class="card animate-fade-in" style="animation-delay: 0.5s;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                            <h3 style="font-weight: 600;">Curation Progress</h3>
-                            <select class="btn-glass" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">
-                                <option>Weekly</option>
-                                <option>Monthly</option>
-                            </select>
-                        </div>
-                        <div style="height: 300px;">
-                            <canvas id="curationChart"></canvas>
-                        </div>
-                    </div>
+async function u(){
+var b=$('connection-status'),p=ps?ps.value:'weekly';
+try{
+var r=await fetch('http://127.0.0.1:8000/stats/?period='+p);
+if(!r.ok)throw new Error('err');
+var d=await r.json();ld=d;
+if(b)b.innerHTML='<i class="fas fa-circle" style="color:var(--accent-success);margin-right:5px;font-size:0.6rem"></i> Online';
+st('total-articles',d.total_articles);st('total-articles-trend',(d.new_articles_today||0)+' new today');
+st('done-posts',d.done_posts);st('done-pct',(d.completion_rate||0)+'%');
+if(d.done_this_week!==undefined&&d.done_last_week!==undefined){var tr=d.done_this_week-d.done_last_week,ti2=tr>=0?'<i class="fas fa-arrow-up" style="color:#10b981"></i>':'<i class="fas fa-arrow-down" style="color:#ef4444"></i>';sh('done-trend',ti2+' '+d.done_this_week+' done this week ('+(tr>=0?'+':'')+tr+' vs last)')}
+st('undone-posts',d.undone_posts);var uv=d.total_articles-d.total_read;st('unread-posts',uv>0?uv:0);st('new-today',d.new_articles_today||0);
+st('completion-rate',(d.completion_rate||0)+'%');
+st('posted-count',d.posted);st('posted-rate',(d.posted_rate||0)+'%');st('posted-today',d.posted_today||0);
+st('whatsapped-count',d.whatsapped);st('whatsapped-rate',(d.whatsapped_rate||0)+'%');st('whatsapped-today',d.whatsapped_today||0);
+st('total-feeds',d.total_feeds);st('active-feeds',d.active_feeds||0);st('avg-per-feed',d.avg_per_feed||0);
+ st('updated-today',d.updated_recently||0);st('zero-engagement',d.zero_engagement||0);
+ st('read-rate',(d.read_rate||0)+'%');st('read-rate-articles',d.total_read||0);
+ st('social-share-rate',(d.social_share_rate||0)+'%');st('social-share-count',(d.posted||0)+(d.whatsapped||0));
+ st('new-this-week',d.new_this_week||0);
+ var mw=d.done_this_week||0,lw=d.done_last_week||0,mo=mw-lw,mc=mo>0?'color:#10b981':'color:#ef4444'; sh('weekly-momentum','<span style="'+mc+'">'+(mo>=0?'+':'')+mo+'</span>');st('momentum-this-week',mw);st('momentum-last-week',lw);
+ra(d);
+isc([d.linkedin_imports||0]);
+var s=$('social-imports-stats');if(s)s.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div style="display:flex;align-items:center;gap:8px"><i class="fab fa-linkedin" style="color:#0a66c2;font-size:1.2rem"></i><span style="font-weight:500;font-size:0.9rem">LinkedIn</span></div><span style="font-weight:600">'+(d.linkedin_imports||0)+'</span></div>';
+rft(d.feed_stats);uaf(d.recent_activity);
+}catch(e){console.error('DE:',e);if(b)b.innerHTML='<i class="fas fa-circle" style="color:var(--accent-danger);margin-right:5px;font-size:0.6rem"></i> Offline'}
+}
+function st(id,v){var e=$(id);if(e)e.textContent=v||0}
+function sh(id,h){var e=$(id);if(e)e.innerHTML=h}
+function ra(d){if(d.trend_data){ic(d.trend_data);idc(d.trend_data)}isc2(d)}
 
-                    <!-- Recent Activity Card -->
-                    <div class="card animate-fade-in" style="animation-delay: 0.6s;">
-                        <h3 style="font-weight: 600; margin-bottom: 1.5rem;">Feed Activity</h3>
-                        <div id="activity-feed-container" style="display: flex; flex-direction: column; gap: 1.2rem;">
-                            <!-- Dynamically populated by JS -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Secondary Analytics Grid -->
-                <div class="main-grid" style="margin-top: 1.5rem; grid-template-columns: 1fr 2fr;">
-                    <!-- Social Imports Breakdown -->
-                    <div class="card animate-fade-in" style="animation-delay: 0.7s;">
-                        <h3 style="font-weight: 600; margin-bottom: 1.5rem;">Social Imports</h3>
-                        <div style="height: 200px; display: flex; justify-content: center; align-items: center; position: relative;">
-                            <canvas id="socialImportsChart"></canvas>
-                        </div>
-                        <div id="social-imports-stats" style="display: flex; flex-direction: column; gap: 0.8rem; margin-top: 1.5rem;">
-                            <!-- Dynamically populated by JS -->
-                        </div>
-                    </div>
-
-                    <!-- Distribution Channels Timeline -->
-                    <div class="card animate-fade-in" style="animation-delay: 0.8s;">
-                        <h3 style="font-weight: 600; margin-bottom: 1.5rem;">Distribution Timeline</h3>
-                        <div style="height: 300px;">
-                            <canvas id="distributionChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <script src="dashboard.js"></script>
+function ic(td){
+var ctx=$('curationChart');if(!ctx)return;if(cc)cc.destroy();
+cc=new Chart(ctx.getContext('2d'),{type:'bar',data:{labels:td.labels,datasets:[{label:'Done',data:td.done,backgroundColor:'#8b5cf6',borderRadius:6},{label:'Undone',data:td.undone,backgroundColor:id()?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.1)',borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:tc(),font:{size:12}}}},scales:{y:{stacked:true,beginAtZero:true,grid:{color:gc()},ticks:{color:tc()}},x:{stacked:true,grid:{display:false},ticks:{color:tc()}}}}});
+}
+function isc(data){
+var ctx=$('socialImportsChart');if(!ctx)return;if(sc)sc.destroy();
+sc=new Chart(ctx.getContext('2d'),{type:'doughnut',data:{labels:['LinkedIn','Facebook','Instagram'],datasets:[{data:data,backgroundColor:['#0a66c2','#1877f2','#e1306c'],borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:'75%',plugins:{legend:{display:false}}}});
+}
+function idc(td){
+var ctx=$('distributionChart');if(!ctx)return;if(dc)dc.destroy();
+dc=new Chart(ctx.getContext('2d'),{type:'line',data:{labels:td.labels,datasets:[{label:'WhatsApp',data:td.whatsapped,borderColor:'#25D366',backgroundColor:'rgba(37,211,102,0.1)',borderWidth:2,fill:true,tension:0.3},{label:'Posted',data:td.posted,borderColor:'#ff5722',backgroundColor:'rgba(255,87,34,0.1)',borderWidth:2,fill:true,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:tc(),font:{size:12}}}},scales:{y:{beginAtZero:true,grid:{color:gc()},ticks:{color:tc()}},x:{grid:{display:false},ticks:{color:tc()}}}}});
+}
+function isc2(d){
+var ctx=$('statusChart');if(!ctx)return;if(stc)stc.destroy();
+stc=new Chart(ctx.getContext('2d'),{type:'doughnut',data:{labels:['Done','Undone','Posted','WhatsApped'],datasets:[{data:[d.done_posts||0,d.undone_posts||0,d.posted||0,d.whatsapped||0],backgroundColor:['#8b5cf6','rgba(0,0,0,0.15)','#ff5722','#25D366'],borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{color:tc(),font:{size:10},padding:12}}}}});
+}
+function rft(stats){
+var tb=$('feed-table-body');if(!tb)return;
+if(!stats||stats.length===0){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">No feeds.</td></tr>';return}
+tb.innerHTML=stats.map(function(f){var p=f.total>0?Math.round((f.done/f.total)*100):0;return'<tr><td><span class="feed-name">'+esc(f.title||f.url)+'</span></td><td>'+f.total+'</td><td>'+f.done+'</td><td><span class="pct '+(p>50?'pct-high':'pct-low')+'">'+p+'%</span></td><td>'+f.posted+'</td><td>'+f.whatsapped+'</td></tr>'}).join('');
+}
+function esc(s){if(!s)return '';var d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function uaf(a){
+var c=$('activity-feed-container');if(!c)return;c.innerHTML='';
+if(!a||a.length===0){c.innerHTML='<p style="text-align:center;color:var(--text-muted);font-size:0.8rem;padding:2rem">No recent activity.</p>';return}
+a.forEach(function(i){var ic='fa-check',bg='rgba(16,185,129,0.2)',co='#10b981',tx='Article Curation';if(i.is_whatsapped){ic='fa-whatsapp';bg='rgba(37,211,102,0.2)';co='#25D366';tx='Shared via WhatsApp'}else if(i.is_posted){ic='fa-share-nodes';bg='rgba(6,182,212,0.2)';co='#06b6d4';tx='Posted to Blogger'}else if(i.is_done){tx='Marked as DONE'}
+var e=document.createElement('div');e.style.cssText='display:flex;gap:15px;margin-bottom:1.2rem';
+e.innerHTML='<div style="width:35px;height:35px;border-radius:8px;background:'+bg+';display:flex;align-items:center;justify-content:center;color:'+co+'"><i class="fas '+ic+'"></i></div><div><p style="font-size:0.9rem;font-weight:500">'+tx+'</p><p style="font-size:0.75rem;color:var(--text-muted)">'+esc((i.title||'').substring(0,50))+'...</p></div>';c.appendChild(e)});
+}
+u();setInterval(u,60000);
+console.log('EduFeed Dashboard v4 Inline.');
+});
+</script>
 </body>
 </html>
