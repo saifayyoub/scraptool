@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
@@ -70,6 +70,9 @@ class FeedUpdate(BaseModel):
 
 @app.get("/")
 def read_root():
+    index_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
     return {"status": "EduFeed Backend is running."}
 
 # ── Feeds ────────────────────────────────────────────────────────────────────
