@@ -1,0 +1,16 @@
+.git
+.gitignore
+backend/venv
+**/__pycache__
+**/*.pyc
+*.bat
+README.md
+
+# Secrets and logs - never put these in an image
+Credentials
+backend/blogger_config.json
+backend/server.log
+backend/server.prev.log
+
+# Windows-only Tailwind binary (62 MB, not used in the container)
+frontend/tailwindcss.exe

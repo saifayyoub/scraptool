@@ -722,4 +722,6 @@ if os.path.exists(frontend_path):
 
 if __name__ == "__main__":
     reload_flag = os.environ.get("EDUFEED_RELOAD", "").strip().lower() in ("1", "true", "yes")
-    uvicorn.run("main:app", host="127.0.0.1", port=8002, reload=reload_flag)
+    host = os.environ.get("HOST") or "127.0.0.1"
+    port = int(os.environ.get("PORT") or 8002)
+    uvicorn.run("main:app", host=host, port=port, reload=reload_flag)
