@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const badge = $('connection-status');
         const period = periodSelect ? periodSelect.value : 'weekly';
         try {
-            const res = await fetch('http://127.0.0.1:8002/stats/?period=' + period);
+            const res = await fetch('/stats/?period=' + period);
             if (!res.ok) throw new Error('Backend error');
             const d = await res.json();
             lastData = d;

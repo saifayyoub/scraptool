@@ -128,7 +128,7 @@ function $(i){return document.getElementById(i)}
 async function u(){
 var b=$('connection-status'),p=ps?ps.value:'weekly';
 try{
-var r=await fetch('http://127.0.0.1:8000/stats/?period='+p);
+var r=await fetch('/stats/?period='+p);
 if(!r.ok)throw new Error('err');
 var d=await r.json();ld=d;
 if(b)b.innerHTML='<i class="fas fa-circle" style="color:var(--accent-success);margin-right:5px;font-size:0.6rem"></i> Online';

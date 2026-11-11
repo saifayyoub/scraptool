@@ -1,4 +1,4 @@
-const API = 'http://127.0.0.1:8002';
+const API = ''; // same origin: works locally on 127.0.0.1:8002 and on any deployed URL
 let feeds = [];
 let articles = [];
 let selectedArticle = null;
