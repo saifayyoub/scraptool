@@ -70,29 +70,45 @@ database, so EduFeed can store its data outside the container:
 - On a server, set the `DATABASE_URL` environment variable and the same backend
   stores everything in PostgreSQL instead.
 
-### 1. Create a free PostgreSQL database
+### 1. The database for this project
 
-Any hosted PostgreSQL works. A free option with no card:
+This repository is linked to the Neon project `my-first-project`
+(`cool-scene-62264594`, organisation `org-summer-cake-13224688`, branch
+`production`, region `aws-eu-central-1`). The Neon CLI wrote the connection
+string to `.env.local` in the project root; that file is gitignored on purpose,
+so the secret never reaches GitHub or the Docker image.
 
-1. Sign up at <https://neon.com> with GitHub.
-2. **Create project** (region closest to you, default Postgres version).
-3. Copy the **connection string** from the dashboard, it looks like
-   `postgresql://user:password@ep-xxx.eu-central-1.aws.neon.tech/neondb?sslmode=require`.
+To use a different database, run `neon init` again (or create a project at
+<https://neon.com>) and put its connection string in `.env.local`.
 
 ### 2. Point the deployments at it
 
-Add one environment variable named `DATABASE_URL` with that string:
+Add one environment variable named `DATABASE_URL` with the value from
+`.env.local` (the line that starts with `DATABASE_URL=`):
 
 - **SnapDeploy**: open the container -> **Environment variables** -> add
   `DATABASE_URL` -> save (it restarts the container with the new value).
 - **Light Cloud**: open the app -> **Environment variables** -> add `DATABASE_URL`
   -> save, then **Deploy** (or push to `main`) to restart it.
 
+With the Light Cloud CLI the same step is:
+
+```sh
+lc env vars set DATABASE_URL="postgresql://..." --redeploy
+```
+
 The tables are created automatically on the first start.
 
 ### 3. Copy your current local data (one time)
 
 From the `backend` folder on your PC:
+
+```bat
+venv\Scripts\python.exe migrate_to_postgres.py
+```
+
+The script reads the connection string from `.env.local` automatically. To point
+it somewhere else, set it yourself first:
 
 ```bat
 set DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require

@@ -11,6 +11,10 @@ Credentials
 backend/blogger_config.json
 backend/server.log
 backend/server.prev.log
+.env
+.env.*
+.neon
+node_modules
 
 # Windows-only Tailwind binary (62 MB, not used in the container)
 frontend/tailwindcss.exe

@@ -7,9 +7,13 @@ your current data.
 
 Usage, from the `backend` folder:
 
+    python migrate_to_postgres.py
+
+The script reads DATABASE_URL from the environment, or from the `.env` file that
+`neon init` writes in the project root. You can also set it yourself first:
+
     set DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require   (Windows)
     export DATABASE_URL="postgresql://..."                                    (macOS/Linux)
-    python migrate_to_postgres.py
 
 Optional: SQLITE_SOURCE=/path/to/other.db to copy a different SQLite file.
 Re-running is safe: rows that already exist are skipped.
@@ -18,9 +22,44 @@ import os
 import sqlite3
 import sys
 
-from database import DB_PATH, IS_POSTGRES, get_db, init_db
-
 TABLES = ("feeds", "folders", "articles")
+
+
+def _load_env_file():
+    """Pick up DATABASE_URL from a .env file written by `neon init`."""
+    if os.environ.get("DATABASE_URL", "").strip():
+        return
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(here)
+    candidates = (
+        os.path.join(here, ".env"),
+        os.path.join(here, ".env.local"),
+        os.path.join(root, ".env"),
+        os.path.join(root, ".env.local"),
+    )
+    for candidate in candidates:
+        if not os.path.exists(candidate):
+            continue
+        try:
+            with open(candidate, encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, value = line.split("=", 1)
+                    if key.strip() == "DATABASE_URL":
+                        value = value.strip().strip('"').strip("'")
+                        if value:
+                            os.environ["DATABASE_URL"] = value
+                            print(f"Using DATABASE_URL from {candidate}")
+                            return
+        except OSError:
+            continue
+
+
+_load_env_file()
+
+from database import DB_PATH, IS_POSTGRES, get_db, init_db  # noqa: E402
 
 
 def main():

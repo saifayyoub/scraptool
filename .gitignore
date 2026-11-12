@@ -5,6 +5,11 @@ backend/server.log
 backend/server.prev.log
 
 # Environment and caches
+.env
+.env.*
+!.env.example
+.neon
 backend/venv/
 __pycache__/
 *.pyc
+node_modules/
