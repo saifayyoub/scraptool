@@ -40,7 +40,9 @@ The repository ships a `Dockerfile` that both platforms build as-is: it listens 
 1. Sign up at <https://snapdeploy.dev> (GitHub login, free tier needs no card).
 2. In the dashboard: **New container -> GitHub**, authorize the SnapDeploy GitHub App
    for `saifayyoub/scraptool`, pick branch `main` and root directory `/`.
-3. Keep the default build settings. No environment variables are required.
+3. Keep the default build settings. Add `DATABASE_URL` (see *Keep your data on a
+   deployed server*) so your changes are saved, or leave it empty to run on the
+   reset-on-restart SQLite file.
 4. Deploy. The app is live at `https://<name>.containers.snapdeploy.app`.
 5. Open the container page for live logs - same output as the local backend window.
 
@@ -51,21 +53,66 @@ The repository ships a `Dockerfile` that both platforms build as-is: it listens 
 2. **Create -> Deploy from GitHub**, choose the repository and branch `main`.
    The type is detected as **Dockerfile / Backend (runs on a server)**.
 3. Leave install/build commands empty and the port at `8080` (read from `EXPOSE`).
-   No environment variables are needed.
+   Add `DATABASE_URL` (see *Keep your data on a deployed server*) so your changes
+   are saved.
 4. Click **Deploy**. The app is live at
    `https://{branch}-{app}-{workspace}.light-cloud.io`, and every push to `main`
    redeploys it.
+
+## Keep your data on a deployed server (PostgreSQL)
+
+A container has no permanent disk: every restart, wake from sleep or redeploy
+resets its files back to the image. That is why an article you marked as done
+came back after a while. Both platforms allow outbound connections to a hosted
+database, so EduFeed can store its data outside the container:
+
+- Local use (`run.bat`) keeps using the bundled SQLite file - nothing to set up.
+- On a server, set the `DATABASE_URL` environment variable and the same backend
+  stores everything in PostgreSQL instead.
+
+### 1. Create a free PostgreSQL database
+
+Any hosted PostgreSQL works. A free option with no card:
+
+1. Sign up at <https://neon.com> with GitHub.
+2. **Create project** (region closest to you, default Postgres version).
+3. Copy the **connection string** from the dashboard, it looks like
+   `postgresql://user:password@ep-xxx.eu-central-1.aws.neon.tech/neondb?sslmode=require`.
+
+### 2. Point the deployments at it
+
+Add one environment variable named `DATABASE_URL` with that string:
+
+- **SnapDeploy**: open the container -> **Environment variables** -> add
+  `DATABASE_URL` -> save (it restarts the container with the new value).
+- **Light Cloud**: open the app -> **Environment variables** -> add `DATABASE_URL`
+  -> save, then **Deploy** (or push to `main`) to restart it.
+
+The tables are created automatically on the first start.
+
+### 3. Copy your current local data (one time)
+
+From the `backend` folder on your PC:
+
+```bat
+set DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
+venv\Scripts\python.exe migrate_to_postgres.py
+```
+
+It copies feeds, folders and articles (keeping their ids and statuses) and can be
+re-run safely - existing rows are skipped. Afterwards the deployed app shows the
+same data as your local copy, and every change you make online is saved in
+PostgreSQL, so it survives refreshes, sleeps and redeploys.
+
+Without `DATABASE_URL` the app works exactly as before, with `backend/edufeed.db`.
 
 ### Limits that matter for this app (both platforms)
 
 - Free tiers sleep / scale to zero when idle, so scheduled feed scans do not run then.
   SnapDeploy sleeps after ~15 min; Light Cloud scales to zero and wakes on the next visit.
-- **No persistent disk.** The filesystem (including `edufeed.db`) resets on every
-  wake, restart and redeploy. The image starts from the database snapshot committed
-  to git, so changes made online are lost. For real use, move state to an external
-  database or object storage and use an always-on plan.
 - `backend/blogger_config.json` is deliberately not in git, so Blogger publishing
   is not configured on the server.
 - The app has no authentication: anyone with the URL can read and change the data.
+
 
 

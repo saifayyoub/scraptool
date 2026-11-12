@@ -5,3 +5,4 @@ httpx
 pydantic
 requests
 trafilatura
+pg8000

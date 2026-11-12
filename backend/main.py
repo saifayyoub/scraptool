@@ -108,22 +108,23 @@ def add_feed(feed: FeedCreate):
     conn = get_db()
     cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO feeds (title, url) VALUES (?, ?)", (title, feed.url))
-        feed_id = cursor.lastrowid
-        extras = {}
-        for col in ["max_entries","scan_interval","folder_id","proxy","username","password","full_text"]:
-            try:
-                cursor.execute(f"SELECT {col} FROM feeds LIMIT 1")
-                extras[col] = True
-            except Exception:
-                extras[col] = False
-        if extras.get("max_entries"):
-            cursor.execute("UPDATE feeds SET max_entries=?, scan_interval=?, folder_id=?, proxy=?, username=?, password=?, full_text=? WHERE id=?",
-                (feed.max_entries if feed.max_entries is not None else 20,
-                 feed.scan_interval if feed.scan_interval is not None else 0,
-                 feed.folder_id if feed.folder_id is not None else None,
-                 feed.proxy or "", feed.username or "", feed.password or "",
-                 feed.full_text if feed.full_text is not None else 1, feed_id))
+        cursor.execute(
+            "INSERT INTO feeds (title, url, max_entries, scan_interval, folder_id, proxy, username, password, full_text) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                title,
+                feed.url,
+                feed.max_entries if feed.max_entries is not None else 20,
+                feed.scan_interval if feed.scan_interval is not None else 0,
+                feed.folder_id if feed.folder_id is not None else None,
+                feed.proxy or "",
+                feed.username or "",
+                feed.password or "",
+                feed.full_text if feed.full_text is not None else 1,
+            ),
+        )
+        cursor.execute("SELECT id FROM feeds WHERE url = ?", (feed.url,))
+        feed_id = cursor.fetchone()[0]
         conn.commit()
     except Exception as e:
         conn.close()
@@ -310,8 +311,9 @@ def create_folder(folder: FolderCreate):
     cursor = conn.cursor()
     try:
         cursor.execute("INSERT INTO folders (name) VALUES (?)", (folder.name,))
+        cursor.execute("SELECT id FROM folders WHERE name = ?", (folder.name,))
+        fid = cursor.fetchone()[0]
         conn.commit()
-        fid = cursor.lastrowid
     except Exception:
         conn.close()
         raise HTTPException(status_code=400, detail="Folder name must be unique.")
@@ -369,6 +371,10 @@ def sync_feeds():
                 conn.commit()
             except Exception as e:
                 print(f"Error syncing feed: {str(e).encode('ascii', 'ignore').decode()}")
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
                 continue
         return {"status": "success", "new_articles_count": new_articles, "updated_articles_count": updated_articles, "entries_processed": entries_processed}
     except Exception as e:
@@ -713,7 +719,7 @@ def publish_article_blogger(article_id: int):
     if result["success"]:
         c = get_db()
         c.execute("UPDATE articles SET is_posted = 1 WHERE id = ?", (article_id,))
-        c.connection.commit()
+        c.commit()
         c.close()
     return result
 

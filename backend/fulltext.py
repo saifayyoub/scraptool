@@ -137,31 +137,33 @@ def process_feed_entries(cursor, feed_id, entries, max_entries, enable_fulltext=
             row = cursor.fetchone()
             existing_attempted = bool(row and row["fulltext_attempted"])
         info = prepare_entry(entry, feed_id, enable_fulltext=enable_fulltext, skip_extract=existing_attempted)
-        try:
-            cursor.execute("""
-                INSERT INTO articles (feed_id, title, link, published_date, description, fulltext_attempted, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (feed_id, info["title"], info["link"], info["published"], info["description"], info["fulltext_attempted"]))
+        cursor.execute("""
+            INSERT INTO articles (feed_id, title, link, published_date, description, fulltext_attempted, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT (link) DO NOTHING
+        """, (feed_id, info["title"], info["link"], info["published"], info["description"], info["fulltext_attempted"]))
+        if cursor.rowcount > 0:
             new_articles += 1
-        except Exception:
-            cursor.execute(
-                "SELECT title, description, published_date, fulltext_attempted FROM articles WHERE link = ?",
-                (info["link"],),
-            )
-            existing = cursor.fetchone()
-            if existing:
-                old_title, old_desc, old_pub, old_attempted = existing["title"], existing["description"], existing["published_date"], existing["fulltext_attempted"]
-                new_desc = info["description"]
-                if old_attempted and not info["fulltext_attempted"] and needs_full_text(info["raw"]):
-                    new_desc = old_desc
-                if old_title != info["title"] or old_desc != new_desc or old_pub != info["published"]:
-                    new_attempted = existing["fulltext_attempted"]
-                    if info["fulltext_attempted"]:
-                        new_attempted = 1
-                    cursor.execute("""
-                        UPDATE articles SET title = ?, published_date = ?, description = ?,
-                            fulltext_attempted = ?, updated_at = CURRENT_TIMESTAMP, is_done = 0, is_read = 0
-                        WHERE link = ?
-                    """, (info["title"], info["published"], new_desc, new_attempted, info["link"]))
-                    updated_articles += 1
+            continue
+        # The link already exists: refresh the stored copy when the feed changed it.
+        cursor.execute(
+            "SELECT title, description, published_date, fulltext_attempted FROM articles WHERE link = ?",
+            (info["link"],),
+        )
+        existing = cursor.fetchone()
+        if existing:
+            old_title, old_desc, old_pub, old_attempted = existing["title"], existing["description"], existing["published_date"], existing["fulltext_attempted"]
+            new_desc = info["description"]
+            if old_attempted and not info["fulltext_attempted"] and needs_full_text(info["raw"]):
+                new_desc = old_desc
+            if old_title != info["title"] or old_desc != new_desc or old_pub != info["published"]:
+                new_attempted = existing["fulltext_attempted"]
+                if info["fulltext_attempted"]:
+                    new_attempted = 1
+                cursor.execute("""
+                    UPDATE articles SET title = ?, published_date = ?, description = ?,
+                        fulltext_attempted = ?, updated_at = CURRENT_TIMESTAMP, is_done = 0, is_read = 0
+                    WHERE link = ?
+                """, (info["title"], info["published"], new_desc, new_attempted, info["link"]))
+                updated_articles += 1
     return new_articles, updated_articles
