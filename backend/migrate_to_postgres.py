@@ -62,6 +62,41 @@ _load_env_file()
 from database import DB_PATH, IS_POSTGRES, get_db, init_db  # noqa: E402
 
 
+def _remote_ids(cur, table):
+    cur.execute(f"SELECT id FROM {table}")
+    return {row[0] for row in cur.fetchall()}
+
+
+def _copy_table(conn, cur, src, table, batch_size=200):
+    """Copy rows that do not exist in PostgreSQL yet, a few hundred at a time."""
+    rows = src.execute(f"SELECT * FROM {table}").fetchall()
+    if not rows:
+        print(f"{table}: nothing to copy")
+        return 0
+    columns = list(rows[0].keys())
+    existing = _remote_ids(cur, table)
+    pending = [tuple(r) for r in rows if r[0] not in existing]
+    if not pending:
+        print(f"{table}: already up to date ({len(rows)} rows)")
+        return 0
+
+    one_row = "(" + ", ".join(["?"] * len(columns)) + ")"
+    copied = 0
+    for start in range(0, len(pending), batch_size):
+        batch = pending[start:start + batch_size]
+        values = ", ".join([one_row] * len(batch))
+        sql = (
+            f"INSERT INTO {table} ({', '.join(columns)}) "
+            f"VALUES {values} ON CONFLICT DO NOTHING"
+        )
+        params = [value for row in batch for value in row]
+        cur.execute(sql, params)
+        conn.commit()
+        copied += len(batch)
+        print(f"{table}: {copied}/{len(pending)} new rows copied")
+    return copied
+
+
 def main():
     if not IS_POSTGRES:
         print("DATABASE_URL is not set (or is not a postgresql:// URL).")
@@ -83,19 +118,7 @@ def main():
     cur = conn.cursor()
     try:
         for table in TABLES:
-            rows = src.execute(f"SELECT * FROM {table}").fetchall()
-            if not rows:
-                print(f"{table}: nothing to copy")
-                continue
-            columns = rows[0].keys()
-            placeholders = ", ".join(["?"] * len(columns))
-            sql = (
-                f"INSERT INTO {table} ({', '.join(columns)}) "
-                f"VALUES ({placeholders}) ON CONFLICT DO NOTHING"
-            )
-            cur.executemany(sql, [tuple(r) for r in rows])
-            conn.commit()
-            print(f"{table}: {len(rows)} rows copied")
+            _copy_table(conn, cur, src, table)
 
         # Keep auto-increment counters ahead of the copied ids.
         for table in TABLES:

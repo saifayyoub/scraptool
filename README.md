@@ -115,10 +115,11 @@ set DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 venv\Scripts\python.exe migrate_to_postgres.py
 ```
 
-It copies feeds, folders and articles (keeping their ids and statuses) and can be
-re-run safely - existing rows are skipped. Afterwards the deployed app shows the
-same data as your local copy, and every change you make online is saved in
-PostgreSQL, so it survives refreshes, sleeps and redeploys.
+It copies feeds, folders and articles (keeping their ids and statuses). Re-running
+is safe and quick: rows that already exist are skipped, so it only adds what is
+missing and never overwrites changes you made online. Afterwards the deployed app
+shows the same data as your local copy, and every change you make online is saved
+in PostgreSQL, so it survives refreshes, sleeps and redeploys.
 
 Without `DATABASE_URL` the app works exactly as before, with `backend/edufeed.db`.
 
